@@ -1,0 +1,92 @@
+/* AO mascot rig styling.
+   Colours come from assets/logo/ao-logo.svg. Override the custom properties on
+   .ao-rig (or any ancestor) to re-skin the mascot per demo version. */
+
+.ao-rig {
+  --ao-body: #79b0dc;
+  --ao-body-light: #a5cde7;
+  --ao-body-shade: #517cb8;
+  --ao-outline: #2a3e6b;
+  --ao-eye: #202943;
+  --ao-baton: #dee3ea;
+  --ao-baton-shade: #7e8bb0;
+  --ao-ground: rgba(32, 41, 67, 0.28);
+  --ao-outline-width: 3;
+
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.ao-rig__body {
+  fill: var(--ao-body);
+}
+
+.ao-rig__light {
+  fill: var(--ao-body-light);
+}
+
+.ao-rig__shade {
+  fill: var(--ao-body-shade);
+}
+
+.ao-rig__outline {
+  fill: none;
+  stroke: var(--ao-outline);
+  stroke-width: var(--ao-outline-width);
+}
+
+/* Fills the gap at a bending joint. Fill only, no outline. */
+.ao-rig__joint {
+  fill: var(--ao-body);
+}
+
+.ao-rig--far .ao-rig__joint {
+  fill: var(--ao-body-shade);
+}
+
+.ao-rig__eye {
+  fill: var(--ao-eye);
+}
+
+.ao-rig__paw {
+  fill: var(--ao-body);
+  stroke: var(--ao-outline);
+  stroke-width: var(--ao-outline-width);
+}
+
+/* The far leg of each pair reads as depth, not as a second colour. */
+.ao-rig--far .ao-rig__body {
+  fill: var(--ao-body-shade);
+}
+
+.ao-rig--far .ao-rig__shade {
+  fill: var(--ao-outline);
+  opacity: 0.35;
+}
+
+.ao-rig--far .ao-rig__outline {
+  stroke: var(--ao-outline);
+  opacity: 0.75;
+}
+
+.ao-rig__baton-stick {
+  fill: var(--ao-baton);
+  stroke: var(--ao-baton-shade);
+  stroke-width: 1.5;
+}
+
+.ao-rig__baton-grip {
+  fill: var(--ao-baton-shade);
+}
+
+.ao-rig__ground {
+  fill: var(--ao-ground);
+}
+
+/* Poses are set as SVG transform attributes every frame, so no CSS transitions
+   here by default. A version page can opt in per part if it wants easing. */
+.ao-rig__part {
+  will-change: transform;
+}

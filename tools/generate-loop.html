@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Render the AO bundled loop</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 32px;
+        background: #0d1117;
+        color: #c9d4e4;
+        font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+        max-width: 760px;
+      }
+      h1 {
+        font-size: 16px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #79b0dc;
+      }
+      button,
+      a.button {
+        font: inherit;
+        color: #c9d4e4;
+        background: #1b2740;
+        border: 1px solid #2f4269;
+        border-radius: 6px;
+        padding: 8px 14px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+      }
+      code {
+        color: #a5cde7;
+      }
+      #b64 {
+        display: none;
+      }
+      #log {
+        white-space: pre-wrap;
+        color: #7b8aa5;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>AO bundled loop renderer</h1>
+    <p>
+      Renders the 4-on-the-floor loop offline from Web Audio primitives and writes
+      <code>assets/audio/ao-loop-120bpm.wav</code>. Nothing is downloaded from the network, so
+      the result carries no third-party licensing.
+    </p>
+    <p>
+      <button id="render" type="button">Render</button>
+      <button id="play" type="button" disabled>Preview</button>
+      <a id="download" class="button" hidden download="ao-loop-120bpm.wav">Download .wav</a>
+    </p>
+    <p id="log">idle</p>
+    <p>
+      Headless capture (what produced the committed file):
+      <br />
+      <code
+        >"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" --headless --disable-gpu
+        --virtual-time-budget=20000 --dump-dom
+        http://127.0.0.1:8000/tools/generate-loop.html</code
+      >
+      <br />
+      then base64-decode the contents of <code>&lt;pre id="b64"&gt;</code>.
+    </p>
+    <pre id="b64"></pre>
+
+    <script type="module">
+      import { renderLoop, encodeWav, LOOP } from './loop-generator.js';
+
+      const log = document.getElementById('log');
+      const playButton = document.getElementById('play');
+      const downloadLink = document.getElementById('download');
+      const b64 = document.getElementById('b64');
+      let blob = null;
+
+      async function run() {
+        log.textContent = 'rendering...';
+        const buffer = await renderLoop();
+        blob = encodeWav(buffer);
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        b64.textContent = btoa(binary);
+        downloadLink.href = URL.createObjectURL(blob);
+        downloadLink.hidden = false;
+        playButton.disabled = false;
+        log.textContent =
+          `rendered ${LOOP.bars} bars at ${LOOP.bpm} BPM, ` +
+          `${buffer.duration.toFixed(3)} s, ${buffer.sampleRate} Hz, ` +
+          `${buffer.numberOfChannels} ch, ${bytes.length} bytes`;
+
+        // ?save=1 writes straight into assets/audio/ when the page is served by
+        // tools/save-server.py. Otherwise use the Download button.
+        if (new URLSearchParams(location.search).has('save')) {
+          const response = await fetch(`/__save/${LOOP.fileName}`, { method: 'POST', body: blob });
+          log.textContent += response.ok
+            ? ` - saved to assets/audio/${LOOP.fileName}`
+            : ` - save failed (${response.status})`;
+        }
+      }
+
+      document.getElementById('render').addEventListener('click', run);
+
+      playButton.addEventListener('click', async () => {
+        if (!blob) return;
+        const audio = new Audio(URL.createObjectURL(blob));
+        audio.loop = true;
+        await audio.play();
+        playButton.textContent = 'Playing (reload to stop)';
+      });
+
+      // Auto-render on load so the headless capture above needs no interaction.
+      run().catch((error) => {
+        log.textContent = `render failed: ${error.message}`;
+      });
+    </script>
+  </body>
+</html>

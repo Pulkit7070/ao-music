@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AO rig preview</title>
+    <link rel="stylesheet" href="../src/rig.css" />
+    <style>
+      body {
+        margin: 0;
+        padding: 24px;
+        background: #0d1117;
+        color: #c9d4e4;
+        font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        display: grid;
+        grid-template-columns: minmax(320px, 1fr) 320px;
+        gap: 32px;
+        align-items: start;
+      }
+      h1 {
+        font-size: 15px;
+        margin: 0 0 16px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #79b0dc;
+      }
+      .stage {
+        background: #11161f;
+        border: 1px solid #223049;
+        border-radius: 12px;
+        padding: 16px;
+      }
+      label {
+        display: grid;
+        grid-template-columns: 120px 1fr 48px;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 6px;
+      }
+      input[type='range'] {
+        width: 100%;
+      }
+      button {
+        background: #1b2740;
+        color: #c9d4e4;
+        border: 1px solid #2f4269;
+        border-radius: 6px;
+        padding: 6px 12px;
+        cursor: pointer;
+        font: inherit;
+      }
+      pre {
+        background: #11161f;
+        border: 1px solid #223049;
+        border-radius: 8px;
+        padding: 12px;
+        overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <h1>AO rig preview</h1>
+      <div class="stage"><div id="stage"></div></div>
+      <pre id="dump"></pre>
+    </div>
+    <div>
+      <h1>Joints (degrees)</h1>
+      <div id="controls"></div>
+      <h1 style="margin-top: 20px">Body</h1>
+      <div id="body-controls"></div>
+      <p><button id="reset">reset</button></p>
+    </div>
+
+    <script type="module">
+      import { createRig, JOINTS, JOINT_LIMITS, NEUTRAL_POSE } from '../src/rig.js';
+
+      const rig = createRig(document.getElementById('stage'));
+      const dump = document.getElementById('dump');
+      const controls = document.getElementById('controls');
+      const inputs = {};
+
+      function refresh() {
+        dump.textContent = JSON.stringify(rig.getPose(), null, 1);
+      }
+
+      for (const joint of JOINTS) {
+        const [lo, hi] = JOINT_LIMITS[joint];
+        const label = document.createElement('label');
+        const out = document.createElement('span');
+        const input = document.createElement('input');
+        input.type = 'range';
+        input.min = lo;
+        input.max = hi;
+        input.step = 1;
+        input.value = NEUTRAL_POSE[joint];
+        out.textContent = input.value;
+        input.addEventListener('input', () => {
+          rig.setPose({ [joint]: Number(input.value) });
+          out.textContent = input.value;
+          refresh();
+        });
+        label.append(Object.assign(document.createElement('span'), { textContent: joint }), input, out);
+        controls.appendChild(label);
+        inputs[joint] = input;
+      }
+
+      const body = document.getElementById('body-controls');
+      const bodyControls = [
+        ['scale', 0.5, 1.6, 0.01, 1, (v) => rig.scale(v)],
+        ['squash', -1, 1, 0.01, 0, (v) => rig.squash(v)],
+        ['translateX', -80, 80, 1, 0, (v) => rig.translate(v, ty)],
+        ['translateY', -80, 80, 1, 0, (v) => rig.translate(tx, v)],
+      ];
+      let tx = 0;
+      let ty = 0;
+      for (const [name, lo, hi, step, initial, apply] of bodyControls) {
+        const label = document.createElement('label');
+        const out = document.createElement('span');
+        const input = document.createElement('input');
+        Object.assign(input, { type: 'range', min: lo, max: hi, step, value: initial });
+        out.textContent = String(initial);
+        input.addEventListener('input', () => {
+          const value = Number(input.value);
+          if (name === 'translateX') tx = value;
+          if (name === 'translateY') ty = value;
+          apply(value);
+          out.textContent = input.value;
+        });
+        label.append(Object.assign(document.createElement('span'), { textContent: name }), input, out);
+        body.appendChild(label);
+      }
+
+      document.getElementById('reset').addEventListener('click', () => {
+        rig.reset();
+        for (const joint of JOINTS) inputs[joint].value = NEUTRAL_POSE[joint];
+        refresh();
+      });
+
+      refresh();
+    </script>
+  </body>
+</html>
