@@ -93,6 +93,29 @@ document.addEventListener('fullscreenchange', () => {
   fullButton.textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen';
 });
 
+// Advancing the queue by hand, from the stage itself. The booth does this on
+// its own when djay changes track, but with no booth connected, or with djay
+// sitting idle between tracks, something has to move the list on, and the
+// screen the floor is looking at is where the DJ is standing.
+const nextButton = $('stage-advance');
+
+function playNext() {
+  const pending = store.pending();
+  if (!pending.length) return;
+  store.markPlayed(pending[0].id);
+}
+
+nextButton.addEventListener('click', playNext);
+
+// N for next, so it works in full screen without hunting for a button. Ignored
+// while a guest is typing their request.
+window.addEventListener('keydown', (event) => {
+  if (event.key !== 'n' && event.key !== 'N') return;
+  const tag = event.target && event.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || event.metaKey || event.ctrlKey || event.altKey) return;
+  playNext();
+});
+
 // -- controls and diagnosis ----------------------------------------------------
 
 const gainSlider = $('mic-gain');
@@ -304,6 +327,7 @@ function renderTicker() {
 
   const queued = pending[0];
   const live = booth && booth.current;
+  nextButton.disabled = !queued;
   // The booth wins when it is reporting: it knows what is actually on the
   // decks, the queue only knows what was asked for.
   const current = live

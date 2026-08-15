@@ -134,11 +134,16 @@ h2 {
   border: 0;
 }
 
-.stage-full {
+.stage-controls {
   position: absolute;
   top: 10px;
   left: 12px;
   z-index: 3;
+  display: flex;
+  gap: 6px;
+}
+
+.stage-button {
   font: inherit;
   font-size: 10px;
   letter-spacing: 0.14em;
@@ -151,10 +156,15 @@ h2 {
   opacity: 0.5;
 }
 
-.stage-full:hover {
+.stage-button:hover {
   opacity: 1;
   color: var(--accent);
   border-color: var(--accent);
+}
+
+.stage-button:disabled {
+  opacity: 0.25;
+  cursor: default;
 }
 
 /* The rig is laid out so getCTM() works, but never painted: the canvas is the

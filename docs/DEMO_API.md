@@ -245,8 +245,12 @@ The queue also advances itself. A change of track at the booth means the last
 one finished, so the request it matches is marked played, along with anything
 the DJ skipped over above it; if the finished track matched nothing in the
 queue, the head has had its turn and is marked instead. A track that played for
-under twenty seconds is a preview and consumes nothing. With no booth feed, the
-Played buttons are the only thing that moves the queue.
+under twenty seconds is a preview and consumes nothing.
+
+With no booth feed, or with djay sitting idle between tracks, nothing knows a
+song ended, so the queue has to be moved by hand: the Played buttons on the
+party page, the "Played, next" button in the corner of the stage, or the N key,
+which works in full screen and is ignored while a guest is typing a request.
 
 When the feed reports a track the stage shows it and the whole request queue
 becomes up next, because the booth knows what is on the speakers and the queue
