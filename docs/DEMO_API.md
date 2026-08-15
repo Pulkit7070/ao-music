@@ -249,19 +249,21 @@ long as `normalise()` can find a title: it already accepts the usual wrappers
 artist and playing. When the real contract arrives, `normalise()` is the one
 function to adjust.
 
-The queue also advances itself. A change of track at the booth means the last
-one finished, so the request it matches is marked played, along with anything
-the DJ skipped over above it; if the finished track matched nothing in the
-queue, the head has had its turn and is marked instead. A track that played for
-under twenty seconds is a preview and consumes nothing.
+The queue also advances itself, but only for tracks that were actually
+requested. A change of track at the booth means the last one finished: if it
+matches a request, that request is marked played along with anything the DJ
+skipped over above it. A track matching nothing consumes nothing, because a set
+is mostly the DJ's own records and each of those quietly marking somebody's
+request played would empty the queue of songs nobody ever heard. A track that
+played for under twenty seconds is a preview and consumes nothing either.
 
 With no booth feed, or with djay sitting idle between tracks, nothing knows a
 song ended, so the queue has to be moved by hand: the Played buttons on the
 party page, the "Played, next" button in the corner of the stage, or the N key,
 which works in full screen and is ignored while a guest is typing a request.
 
-When the feed reports a track the stage shows it and the whole request queue
-becomes up next, because the booth knows what is on the speakers and the queue
+When the feed reports a track, both the stage ticker and the queue card show it,
+headed "now playing, from djay", and the whole request queue becomes up next, because the booth knows what is on the speakers and the queue
 only knows what was asked for. Requests carry an optional link; only `http` and
 `https` survive, so a `javascript:` URL typed into that box never reaches an
 href.

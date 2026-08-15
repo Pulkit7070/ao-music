@@ -624,6 +624,10 @@ form .button {
   margin-bottom: 12px;
 }
 
+.queue__now[data-live='yes'] {
+  border-color: var(--accent);
+}
+
 .queue__label {
   font-size: 10px;
   text-transform: uppercase;

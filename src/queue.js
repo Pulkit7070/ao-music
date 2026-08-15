@@ -123,6 +123,11 @@ function timeLabel(at) {
  * @param {object} nodes { form, name, song, feedback, now, list, count, clear }
  */
 export function mountQueueUI(store, nodes) {
+  // What the booth says is on, when it is connected. The queue card has to know
+  // about it: two panels both headed "now playing", one reading the decks and
+  // one reading the request list, is how you end up wondering which is lying.
+  let live = null;
+
   nodes.form.addEventListener('submit', (event) => {
     event.preventDefault();
     const typedLink = nodes.link ? nodes.link.value.trim() : '';
@@ -180,13 +185,29 @@ export function mountQueueUI(store, nodes) {
     return li;
   }
 
-  store.subscribe(() => {
+  function render() {
     const pending = store.pending();
-    const current = pending[0] || null;
-    const upNext = pending.slice(1);
+    // With a live track from the booth, nothing in the queue has played yet, so
+    // every request is still to come.
+    const current = live ? null : pending[0] || null;
+    const upNext = live ? pending : pending.slice(1);
 
     nodes.now.innerHTML = '';
-    if (current) {
+    if (live) {
+      nodes.now.dataset.live = 'yes';
+      delete nodes.now.dataset.id;
+      nodes.now.innerHTML = `
+        <p class="queue__label">Now playing, from djay</p>
+        <p class="queue__now-song"></p>
+        <p class="queue__now-by"></p>`;
+      nodes.now.querySelector('.queue__now-song').textContent = live.title;
+      nodes.now.querySelector('.queue__now-by').textContent = [
+        live.artist,
+        live.deck ? `deck ${live.deck}` : '',
+        live.remaining,
+      ].filter(Boolean).join('  ');
+    } else if (current) {
+      delete nodes.now.dataset.live;
       nodes.now.dataset.id = current.id;
       nodes.now.innerHTML = `
         <p class="queue__label">Now playing</p>
@@ -202,6 +223,7 @@ export function mountQueueUI(store, nodes) {
       if (current.link) nowBy.appendChild(linkFor(current.link));
     } else {
       delete nodes.now.dataset.id;
+      delete nodes.now.dataset.live;
       nodes.now.innerHTML =
         '<p class="queue__label">Now playing</p><p class="queue__empty">Nothing queued yet. First request goes straight on.</p>';
     }
@@ -210,7 +232,7 @@ export function mountQueueUI(store, nodes) {
     if (!upNext.length) {
       const li = document.createElement('li');
       li.className = 'queue__empty';
-      li.textContent = current ? 'Nothing else queued.' : 'Up next is empty.';
+      li.textContent = current || live ? 'No requests waiting.' : 'Up next is empty.';
       nodes.list.appendChild(li);
     } else {
       upNext.forEach((entry, i) => nodes.list.appendChild(row(entry, i + 1)));
@@ -219,7 +241,17 @@ export function mountQueueUI(store, nodes) {
     const playedCount = store.played().length;
     nodes.count.textContent = `${pending.length} waiting, ${playedCount} played`;
     nodes.clear.disabled = playedCount === 0;
-  });
+  }
+
+  store.subscribe(render);
+
+  return {
+    /** Tell the card what the booth is playing, or null when it is not. */
+    setLive(track) {
+      live = track || null;
+      render();
+    },
+  };
 }
 
 export default createQueueStore;

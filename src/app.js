@@ -299,7 +299,7 @@ deck.subscribe((f) => {
 // -- party queue --------------------------------------------------------------
 
 const store = createQueueStore();
-mountQueueUI(store, {
+const queueUI = mountQueueUI(store, {
   form: $('request-form'),
   name: $('request-name'),
   song: $('request-song'),
@@ -410,16 +410,19 @@ function advanceQueue(next) {
   const pending = store.pending();
   if (!pending.length) return;
 
-  // If the finished track was a request, mark it and anything the DJ skipped
-  // over above it. Otherwise the head of the queue has had its turn.
+  // Only a track that matches a request consumes one, along with anything the
+  // DJ skipped over above it. A set is mostly the DJ's own records, and each of
+  // those quietly marking somebody's request played would empty the queue of
+  // songs nobody ever heard. When the DJ does play off-list, N moves the queue.
   const index = pending.findIndex((row) => sameTrack(row.song, finished.title));
-  const upTo = index === -1 ? 0 : index;
-  for (let i = 0; i <= upTo; i++) store.markPlayed(pending[i].id);
+  if (index === -1) return;
+  for (let i = 0; i <= index; i++) store.markPlayed(pending[i].id);
 }
 
 nowPlaying.subscribe((state, status) => {
   booth = state;
   advanceQueue(state && state.current);
+  queueUI.setLive(state && state.current);
   const on = Boolean(state && state.current);
   feedStatus.dataset.live = on ? 'yes' : 'no';
   feedStatus.textContent = !nowPlaying.isEnabled()
