@@ -63,9 +63,23 @@
           <p class="meter-legend">live input level, with a decaying peak marker</p>
           <p class="hint" id="mic-help">
             If the level bar stays flat while music is playing, the page is not hearing the room:
-            check which input your browser is using. If the bar moves but he does not, tell me the
-            pulse and energy numbers on the right.
+            check which input your browser is using.
           </p>
+
+          <div class="controls">
+            <label class="control" for="mic-gain">
+              <span>Input sensitivity <b id="mic-gain-value">12x</b></span>
+              <input id="mic-gain" type="range" min="1" max="48" step="1" value="12" />
+            </label>
+            <label class="control control--check" for="react-all">
+              <input id="react-all" type="checkbox" />
+              <span>React to any sound, not only to music</span>
+            </label>
+            <button type="button" class="button button--ghost" id="diagnose">
+              Diagnose for 8 seconds
+            </button>
+          </div>
+          <pre class="report" id="report" hidden></pre>
         </div>
 
         <div class="card">

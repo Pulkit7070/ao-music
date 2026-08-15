@@ -92,6 +92,78 @@ document.addEventListener('fullscreenchange', () => {
   fullButton.textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen';
 });
 
+// -- controls and diagnosis ----------------------------------------------------
+
+const gainSlider = $('mic-gain');
+const gainValue = $('mic-gain-value');
+gainSlider.addEventListener('input', () => {
+  const value = Number(gainSlider.value);
+  deck.setMicGain(value);
+  gainValue.textContent = `${value}x`;
+});
+
+$('react-all').addEventListener('change', (event) => {
+  choreo.setBypass(event.target.checked);
+});
+
+// Samples the internals for eight seconds and prints where the chain is
+// breaking down. Written to be pasted back to me verbatim.
+const reportBox = $('report');
+const diagnoseButton = $('diagnose');
+let sampling = null;
+
+diagnoseButton.addEventListener('click', () => {
+  if (sampling) return;
+  sampling = { frames: [], until: performance.now() + 8000 };
+  diagnoseButton.disabled = true;
+  reportBox.hidden = false;
+  reportBox.textContent = 'Listening for 8 seconds. Play music now.';
+});
+
+function finishReport() {
+  const rows = sampling.frames;
+  sampling = null;
+  diagnoseButton.disabled = false;
+  if (!rows.length) {
+    reportBox.textContent = 'No frames captured: the animation loop is not running.';
+    return;
+  }
+  const mean = (fn) => rows.reduce((a, r) => a + fn(r), 0) / rows.length;
+  const peak = (fn) => Math.max(...rows.map(fn));
+  const onsets = rows.filter((r) => r.beat).length;
+  const rms = mean((r) => r.f.rms);
+  const music = mean((r) => r.s.music);
+  const energy = mean((r) => r.s.energy);
+  const d = rows[rows.length - 1].s.detail;
+
+  let verdict;
+  if (peak((r) => r.f.rms) < 0.004) {
+    verdict = 'FAULT: the microphone is delivering silence. Wrong input device, or muted.';
+  } else if (onsets < 6) {
+    verdict = `FAULT: only ${onsets} onsets in 8 seconds. It hears sound but finds no beat in it.`;
+  } else if (music < 0.35) {
+    verdict = 'FAULT: onsets found but they are not regular enough to pass as music. Tick "react to any sound".';
+  } else if (energy < 0.25) {
+    verdict = 'FAULT: it knows it is music but has no level to move with. Raise input sensitivity.';
+  } else {
+    verdict = 'OK: it is hearing music and driving the mascot. If he still looks wrong the problem is the motion, not the audio.';
+  }
+
+  reportBox.textContent = [
+    `source        ${deck.getState().source}   status: ${deck.getState().status}`,
+    `mic gain      ${gainSlider.value}x        bypass: ${$('react-all').checked}`,
+    `rms           mean ${rms.toFixed(4)}  peak ${peak((r) => r.f.rms).toFixed(4)}`,
+    `bands         bass ${mean((r) => r.f.bass).toFixed(2)}  lowMid ${mean((r) => r.f.lowMid).toFixed(2)}  mid ${mean((r) => r.f.mid).toFixed(2)}  high ${mean((r) => r.f.high).toFixed(2)}`,
+    `onsets        ${onsets} in 8s   bpm ${rows[rows.length - 1].f.bpm.toFixed(0)}`,
+    `pulse         mean ${music.toFixed(2)}  peak ${peak((r) => r.s.music).toFixed(2)}`,
+    `  regularity  ${d.regularity.toFixed(2)}   density ${d.density.toFixed(2)}   lowLead ${d.lowLead.toFixed(2)}   pumping ${d.pumping.toFixed(2)}`,
+    `energy        ${energy.toFixed(2)}   level ${d.level.toFixed(2)}   autoGainPeak ${d.loudMax.toFixed(3)}   trust ${d.trust.toFixed(2)}`,
+    `frames        ${rows.length} in 8s`,
+    '',
+    verdict,
+  ].join('\n');
+}
+
 // -- readouts -----------------------------------------------------------------
 
 const bars = {
@@ -174,6 +246,11 @@ deck.subscribe((f) => {
   beatDot.classList.toggle('is-on', beatFlash > 0.35);
 
   for (const key in bars) bars[key].style.width = `${(f[key] * 100).toFixed(1)}%`;
+
+  if (sampling) {
+    sampling.frames.push({ f: { rms: f.rms, bass: f.bass, lowMid: f.lowMid, mid: f.mid, high: f.high, bpm: f.bpm }, s: state, beat: f.beat });
+    if (nowMs > sampling.until) finishReport();
+  }
 
   if (nowMs - lastText > 70) {
     lastText = nowMs;

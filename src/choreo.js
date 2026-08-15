@@ -272,6 +272,7 @@ export function createChoreo(rig) {
   let energyRise = 0;
   let energyWas = 0;
 
+  let bypassGate = false;
   let gesture = null; // { key, t }
   const recent = []; // last few gesture keys, so nothing repeats back to back
 
@@ -381,6 +382,9 @@ export function createChoreo(rig) {
     // Slow either way: a single shout cannot fake a pulse into existence, and a
     // gap between tracks does not kill it instantly.
     music = smooth(music, musicTarget, musicTarget > music ? 1.1 : 2.4, step);
+    // The escape hatch: treat any sound as music. Useful when a room, a mic or
+    // a genre defeats the pulse test and you would rather he just danced.
+    if (bypassGate) music = Math.max(music, 0.9);
 
     // Auto gain. A phone speaker across a room lands near 0.02 RMS and a hot
     // line feed near 0.2, so a fixed span means the mascot either barely moves
@@ -597,10 +601,18 @@ export function createChoreo(rig) {
       // How much of what it is hearing counts as music, 0..1.
       music,
       bpm: f.bpm,
+      // Internals, for the diagnostic report on the page.
+      detail: { regularity, density, lowLead, pumping, level, loudMax, trust, onsets: onsetTimes.length },
     };
   }
 
-  return { update };
+  return {
+    update,
+    /** Treat any sound as music, bypassing the pulse test. */
+    setBypass(value) {
+      bypassGate = Boolean(value);
+    },
+  };
 }
 
 export default createChoreo;
