@@ -269,6 +269,9 @@ body[data-route='request'] .booth,
 body[data-route='request'] .queue__actions,
 body[data-route='request'] #queue-clear,
 body[data-route='request'] .state-line,
+body[data-route='request'] .queue__list .queue__actions,
+body[data-route='request'] .card .hint,
+body[data-route='request'] .count,
 body[data-route='request'] .card--mic + .card,
 body[data-route='request'] footer {
   display: none;
