@@ -37,9 +37,18 @@ export function endpointsFor(url) {
 }
 
 export const CONFIG = {
-  // djay-monitor, on the machine running djay Pro. Change it on the party page
-  // or with ?booth=... in the address; whatever is set there is remembered.
-  url: 'http://192.168.88.14:7474/api/status',
+  // djay-monitor runs on the machine with djay Pro, on the local network. A
+  // page served over https cannot call an http address, so there are two ways
+  // in and the right one depends on where the page came from:
+  //
+  //   lan     direct, used when the page is on http or localhost. No
+  //           dependency on anything outside the room.
+  //   public  an https tunnel to the same monitor, used when the page is on
+  //           https. Quick tunnels get a new address each time cloudflared
+  //           starts, so if that happens, paste the new one into the field on
+  //           the party page or open the site with ?booth=<address>.
+  lan: 'http://192.168.88.14:7474/api/status',
+  public: 'https://logged-deal-shipping-brunswick.trycloudflare.com/api/status',
 
   // Anything the endpoint needs. Do not put a real secret here: this page is
   // readable by anyone who opens the tab.
@@ -50,8 +59,13 @@ export const CONFIG = {
   pollSeconds: 3,
 };
 
+/** The address that can actually be reached from where this page is served. */
+export function defaultUrl() {
+  return location.protocol === 'https:' ? CONFIG.public : CONFIG.lan;
+}
+
 /** Pull the endpoint out of the address bar, then out of what was saved. */
-export function resolveUrl(defaultUrl = CONFIG.url) {
+export function resolveUrl(fallback = defaultUrl()) {
   try {
     const fromQuery = new URLSearchParams(location.search).get('booth');
     if (fromQuery !== null) {
@@ -60,11 +74,18 @@ export function resolveUrl(defaultUrl = CONFIG.url) {
       return cleaned;
     }
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved !== null) return saved;
+    // A saved address from the other kind of origin is worse than useless: an
+    // http one on an https page is blocked outright.
+    if (saved !== null && saved !== '' && !blockedHere(saved)) return saved;
+    if (saved === '') return '';
   } catch {
     // storage can be unavailable; the default is fine
   }
-  return defaultUrl;
+  return fallback;
+}
+
+function blockedHere(url) {
+  return location.protocol === 'https:' && /^http:\/\//i.test(url);
 }
 
 export function rememberUrl(url) {
