@@ -30,8 +30,10 @@ const STANCE = {
   head: 0,
   armL_upper: 72,
   armL_lower: 14,
-  armR_upper: 55,
-  armR_lower: 22,
+  // Out over the deck rather than tucked down the side: at a steeper shoulder
+  // angle the whole arm hugs the torso and the hand disappears into it.
+  armR_upper: 18,
+  armR_lower: 18,
   legL_upper: 0,
   legL_lower: 0,
   legR_upper: 0,
@@ -368,7 +370,7 @@ export function createChoreo(rig) {
     const drive = level * clamp((Math.max(music, 0.8 * pumping) - 0.22) / 0.3, 0, 1);
     // Energy rises quickly and falls slowly: that is what "sustained loudness"
     // means, as opposed to a single transient.
-    energy = smooth(energy, drive, drive > energy ? 0.35 : 1.7, step);
+    energy = smooth(energy, drive, drive > energy ? 0.22 : 1.7, step);
 
     const live = loudFast > SILENCE;
     quietFor = live ? 0 : quietFor + step;
@@ -467,26 +469,28 @@ export function createChoreo(rig) {
     const pumpAmount = alive * (0.35 + 0.65 * energy);
 
     const target = {
-      torso: 6.5 * sway + 10 * dip + 1.2 * breath,
-      head: 9 * tickSign * detail + 2.4 * breath - 3 * dip + 3 * halfBar * energy,
+      torso: 7.5 * sway + 13 * dip + 1.2 * breath,
+      head: 11 * tickSign * detail + 2.4 * breath - 5 * dip + 5 * halfBar * energy,
       // Raised hand: up and down through the beat, punching a little harder on
       // the hit itself.
-      armL_upper: STANCE.armL_upper + 30 * pump * pumpAmount + 14 * dip,
-      armL_lower: STANCE.armL_lower + 16 * Math.max(0, -pump) * pumpAmount + 4 * detail,
+      armL_upper: STANCE.armL_upper + 38 * pump * pumpAmount + 18 * dip,
+      armL_lower: STANCE.armL_lower + 20 * Math.max(0, -pump) * pumpAmount + 5 * detail,
       // Working hand: stays down on the console, shoulder drops into the hit,
       // fingers tick with the hats.
-      armR_upper: STANCE.armR_upper + 12 * dip + 2 * detail - 5 * groove * energy,
-      armR_lower: STANCE.armR_lower - 5 * dip + 10 * tickSign * detail + 6 * fader,
+      // The working hand pushes down into every hit and jogs the deck between
+      // them, so it is doing something visible rather than resting.
+      armR_upper: STANCE.armR_upper + 20 * dip + 3 * detail - 7 * groove * energy,
+      armR_lower: STANCE.armR_lower - 10 * dip + 8 * tickSign * detail + 6 * halfBar * energy,
       // Legs are visible now, so they take the weight shift, a knee bend on the
       // landing and nothing else. There is no step cycle in here.
       legL_upper: -3 * sway,
-      legL_lower: 5 * dip + 2 * Math.max(0, sway),
+      legL_lower: 7 * dip + 2 * Math.max(0, sway),
       legR_upper: 3 * sway,
-      legR_lower: 5 * dip + 2 * Math.max(0, -sway),
+      legR_lower: 7 * dip + 2 * Math.max(0, -sway),
     };
 
-    let lift = 14 * dip - 1.5 * breath;
-    let squash = 0.3 * dip + 0.07 * bassSm * energy;
+    let lift = 18 * dip - 1.5 * breath;
+    let squash = 0.34 * dip + 0.08 * bassSm * energy;
 
     // --- gesture overlay ---------------------------------------------------
     let weight = 0;
@@ -518,7 +522,7 @@ export function createChoreo(rig) {
 
     // --- apply -------------------------------------------------------------
     for (const joint in target) {
-      pose[joint] = smooth(pose[joint], target[joint], 0.035, step);
+      pose[joint] = smooth(pose[joint], target[joint], 0.024, step);
     }
     rig.setPose(pose);
     rig
