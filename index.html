@@ -43,7 +43,12 @@
             Play music out loud on the room speakers. This page listens through the microphone and
             the mascot reacts to what it actually hears: nothing in his motion is on a timer.
           </p>
-          <button type="button" id="mic-enable" class="button">Enable microphone</button>
+          <div class="buttons">
+            <button type="button" id="mic-enable" class="button">Enable microphone</button>
+            <button type="button" id="demo-loop" class="button button--ghost">
+              Test without a microphone
+            </button>
+          </div>
           <p class="status" id="mic-status" data-tone="idle">
             The microphone is off. Nothing is recorded or sent anywhere: audio is analysed in this
             tab and never leaves it.
@@ -53,6 +58,11 @@
             <u id="mic-peak"></u>
           </div>
           <p class="meter-legend">live input level, with a decaying peak marker</p>
+          <p class="hint" id="mic-help">
+            If the level bar stays flat while music is playing, the page is not hearing the room:
+            check which input your browser is using. If the bar moves but he does not, tell me the
+            pulse and energy numbers on the right.
+          </p>
         </div>
 
         <div class="card">

@@ -67,6 +67,20 @@ async function enableMic() {
 
 micButton.addEventListener('click', enableMic);
 
+// A microphone-free way to tell a broken page from a broken input: this plays
+// the bundled loop out of the speakers and feeds the same analysis chain. If he
+// dances to this and not to the room, the problem is the microphone.
+const demoButton = $('demo-loop');
+demoButton.addEventListener('click', async () => {
+  try {
+    await deck.setSource('loop');
+    setMicStatus('Playing the bundled loop through your speakers, not the microphone.', 'ok');
+    demoButton.textContent = 'Loop playing';
+  } catch (error) {
+    setMicStatus(`Could not start the bundled loop: ${error && error.message}`, 'error');
+  }
+});
+
 // -- readouts -----------------------------------------------------------------
 
 const bars = {

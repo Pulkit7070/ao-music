@@ -21,16 +21,17 @@
 const SILENCE = 0.009; // RMS below this counts as an empty room
 
 /**
- * Base pose: leaning on the top of the boombox, both hands clear of it so they
- * stay visible above the cabinet.
+ * Base pose: right hand down on the console working the music, left hand up in
+ * the air. The raised hand is placed out to the side rather than straight up so
+ * it clears his own head and stays readable against the sky.
  */
 const STANCE = {
   torso: 0,
   head: 0,
-  armL_upper: -22,
-  armL_lower: 18,
-  armR_upper: 20,
-  armR_lower: 14,
+  armL_upper: 72,
+  armL_lower: 14,
+  armR_upper: 55,
+  armR_lower: 22,
   legL_upper: 0,
   legL_lower: 0,
   legR_upper: 0,
@@ -217,6 +218,10 @@ export function createChoreo(rig) {
   let bassSm = 0;
   let bassMax = 0;
   let bassSlow = 0;
+  let bassAvg = 0;
+  let bassSwing = 0;
+  let midAvg = 0;
+  let midSwing = 0;
   let lastHitAt = -1;
   let highFast = 0;
   let highSlow = 0;
@@ -268,6 +273,22 @@ export function createChoreo(rig) {
     highSlow = smooth(highSlow, f.high, 0.7, step);
 
     midSm = smooth(midSm, f.mid, 0.12, step);
+
+    // How much the low end is actually moving. Music pumps it; a room full of
+    // voices does not. This is the one measure of "there is a track playing"
+    // that does not depend on the onset detector firing at all, which matters
+    // because a small speaker across a room often does not give it enough to
+    // work with.
+    bassAvg = smooth(bassAvg, bassSm, 1.4, step);
+    bassSwing = smooth(bassSwing, Math.abs(bassSm - bassAvg), 0.5, step);
+    midAvg = smooth(midAvg, midSm, 1.4, step);
+    midSwing = smooth(midSwing, Math.abs(midSm - midAvg), 0.5, step);
+    // It only counts if the low end is the thing doing the moving. Voices swing
+    // the mid band hard and the low band barely at all, so comparing the two
+    // separates a kick drum from a room without depending on absolute levels,
+    // which the console has already normalised per band anyway.
+    const lowLead = clamp((bassSwing - midSwing * 0.85) / 0.04, 0, 1);
+    const pumping = clamp((bassSwing - 0.02) / 0.08, 0, 1) * lowLead;
 
     // --- is this music, or is it just a loud room? --------------------------
     //
@@ -344,7 +365,7 @@ export function createChoreo(rig) {
       ? clamp((loudFast - SILENCE) / Math.max(0.012, 0.72 * loudMax - SILENCE), 0, 1)
       : 0;
     // Loudness only counts once it is loudness with a pulse behind it.
-    const drive = level * clamp((music - 0.25) / 0.3, 0, 1);
+    const drive = level * clamp((Math.max(music, 0.8 * pumping) - 0.22) / 0.3, 0, 1);
     // Energy rises quickly and falls slowly: that is what "sustained loudness"
     // means, as opposed to a single transient.
     energy = smooth(energy, drive, drive > energy ? 0.35 : 1.7, step);
@@ -400,7 +421,7 @@ export function createChoreo(rig) {
     // Measured on the raw level, not on the normalised energy: the auto gain
     // above deliberately cancels level changes, so a drop is invisible to it.
     loudLag = smooth(loudLag, loudFast, 1.2, step);
-    const jumped = loudFast > loudLag * 1.9 + 0.02 && loudFast > SILENCE * 1.8 && music > 0.4;
+    const jumped = loudFast > loudLag * 1.9 + 0.02 && loudFast > SILENCE * 1.8 && music > 0.55;
     if (jumped && now - lastDropAt > 12 && (!gesture || GESTURES[gesture.key].set !== 'drop')) {
       startGesture(pick('drop'), now);
       flash = 1;
@@ -416,11 +437,11 @@ export function createChoreo(rig) {
     // Groove moves: while a track is actually running, drop one in on a beat
     // every few bars. Starting on an onset is what makes them land musically
     // instead of arriving at some arbitrary moment.
-    if (music > 0.35 && energy > 0.3 && !gesture && now > nextGrooveAt && hit) {
+    if (music > 0.45 && energy > 0.3 && !gesture && now > nextGrooveAt && hit) {
       startGesture(pick('groove'), now);
       nextGrooveAt = now + beatSeconds * (8 + Math.floor(Math.random() * 3) * 4);
     }
-    if (!(music > 0.35)) nextGrooveAt = Math.max(nextGrooveAt, now + 4);
+    if (!(music > 0.45)) nextGrooveAt = Math.max(nextGrooveAt, now + 4);
 
     // --- reactive pose -----------------------------------------------------
     const amp = 0.3 + 0.7 * energy; // sustained loudness widens every range
@@ -438,16 +459,24 @@ export function createChoreo(rig) {
     fader = smooth(fader, energy, 0.45, step);
     crossfade = smooth(crossfade, clamp(0.5 + (highFast - bassSm) * 0.8, 0, 1), 0.6, step);
 
+    // The raised hand pumps once per beat. It runs off beatPhase so its speed
+    // is the tempo, and off `alive` so it keeps going whenever a track is
+    // playing, even when the pulse score is only middling.
+    const alive = Math.max(music, 0.85 * pumping);
+    const pump = Math.sin(2 * Math.PI * f.beatPhase);
+    const pumpAmount = alive * (0.35 + 0.65 * energy);
+
     const target = {
       torso: 6.5 * sway + 10 * dip + 1.2 * breath,
       head: 9 * tickSign * detail + 2.4 * breath - 3 * dip + 3 * halfBar * energy,
-      // Left hand rides the mixer: it follows the fader it is holding, and
-      // nudges it on the groove rather than on the level.
-      armL_upper: STANCE.armL_upper + 13 * fader - 6 * dip + 8 * groove * energy,
-      armL_lower: STANCE.armL_lower + 9 * fader + 4 * detail,
-      // Right hand on the platter: shoulder drops into the hit, fingers tick.
-      armR_upper: STANCE.armR_upper + 14 * dip + 2 * detail - 7 * groove * energy,
-      armR_lower: STANCE.armR_lower - 5 * dip + 10 * tickSign * detail,
+      // Raised hand: up and down through the beat, punching a little harder on
+      // the hit itself.
+      armL_upper: STANCE.armL_upper + 30 * pump * pumpAmount + 14 * dip,
+      armL_lower: STANCE.armL_lower + 16 * Math.max(0, -pump) * pumpAmount + 4 * detail,
+      // Working hand: stays down on the console, shoulder drops into the hit,
+      // fingers tick with the hats.
+      armR_upper: STANCE.armR_upper + 12 * dip + 2 * detail - 5 * groove * energy,
+      armR_lower: STANCE.armR_lower - 5 * dip + 10 * tickSign * detail + 6 * fader,
       // Legs are visible now, so they take the weight shift, a knee bend on the
       // landing and nothing else. There is no step cycle in here.
       legL_upper: -3 * sway,
