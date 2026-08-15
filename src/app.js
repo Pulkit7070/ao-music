@@ -81,6 +81,17 @@ demoButton.addEventListener('click', async () => {
   }
 });
 
+// Full screen for the floor to look at. The stage drops its aspect ratio while
+// it is full screen and the ASCII grid rebuilds itself from the new size.
+const fullButton = $('stage-full');
+fullButton.addEventListener('click', () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else stage.requestFullscreen().catch((error) => setMicStatus(`Full screen refused: ${error.message}`, 'warn'));
+});
+document.addEventListener('fullscreenchange', () => {
+  fullButton.textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen';
+});
+
 // -- readouts -----------------------------------------------------------------
 
 const bars = {

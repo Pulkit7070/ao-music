@@ -28,8 +28,10 @@ const SILENCE = 0.003; // RMS below this counts as an empty room
 const STANCE = {
   torso: 0,
   head: 0,
-  armL_upper: 72,
-  armL_lower: 14,
+  // Held out to the side, not overhead. Past about 70 degrees this arm swings
+  // inward and the hand ends up sitting on top of his own head.
+  armL_upper: 46,
+  armL_lower: 10,
   // Out over the deck rather than tucked down the side: at a steeper shoulder
   // angle the whole arm hugs the torso and the hand disappears into it.
   armR_upper: 18,
@@ -58,7 +60,7 @@ const GESTURES = {
     dur: 1.7,
     rise: 0.1,
     fall: 0.4,
-    pose: { armL_upper: 118, armL_lower: 45, armR_upper: -108, armR_lower: -38, head: -7, torso: 0 },
+    pose: { armL_upper: 66, armL_lower: 18, armR_upper: -62, armR_lower: -22, head: -7, torso: 0 },
     lift: -12,
     stretch: -0.14,
   },
@@ -67,7 +69,7 @@ const GESTURES = {
     dur: 1.5,
     rise: 0.1,
     fall: 0.45,
-    pose: { armR_upper: -128, armR_lower: -8, armL_upper: -34, head: -9, torso: -4 },
+    pose: { armR_upper: -72, armR_lower: -18, armL_upper: 40, head: -9, torso: -4 },
     lift: -8,
     stretch: -0.1,
   },
@@ -78,7 +80,7 @@ const GESTURES = {
     fall: 0.35,
     // three pumps of the right arm, timed to the gesture rather than to a clock
     pose: (u) => ({
-      armR_upper: -78 - 34 * Math.abs(Math.sin(u * Math.PI * 3)),
+      armR_upper: -52 - 26 * Math.abs(Math.sin(u * Math.PI * 3)),
       armR_lower: -20,
       armL_upper: -30,
       head: -5,
@@ -93,8 +95,8 @@ const GESTURES = {
     rise: 0.15,
     fall: 0.3,
     pose: (u) => ({
-      armR_upper: -96,
-      armR_lower: -28 + 30 * Math.sin(u * Math.PI * 4),
+      armR_upper: -66,
+      armR_lower: -22 + 26 * Math.sin(u * Math.PI * 4),
       head: -4,
     }),
   },
@@ -122,7 +124,7 @@ const GESTURES = {
     dur: 1.9,
     rise: 0.3,
     fall: 0.35,
-    pose: { torso: -13, head: -11, armL_upper: -48, armR_upper: 44 },
+    pose: { torso: -13, head: -11, armL_upper: 30, armR_upper: 36 },
     lift: -4,
   },
   bounce: {
@@ -141,9 +143,9 @@ const GESTURES = {
     rise: 0.2,
     fall: 0.3,
     pose: (u) => ({
-      armL_upper: 18 + 30 * Math.sin(u * Math.PI * 4),
-      armL_lower: 40,
-      armR_upper: -18 - 30 * Math.cos(u * Math.PI * 4),
+      armL_upper: 34 + 26 * Math.sin(u * Math.PI * 4),
+      armL_lower: 24,
+      armR_upper: -14 - 30 * Math.cos(u * Math.PI * 4),
       armR_lower: -26,
       head: 4 * Math.sin(u * Math.PI * 4),
     }),
@@ -157,8 +159,8 @@ const GESTURES = {
     pose: (u) => ({
       torso: 11 * Math.sin(u * Math.PI * 2),
       head: -6 * Math.sin(u * Math.PI * 2),
-      armL_upper: -22 + 16 * Math.sin(u * Math.PI * 2),
-      armR_upper: 20 + 16 * Math.sin(u * Math.PI * 2),
+      armL_upper: 44 + 18 * Math.sin(u * Math.PI * 2),
+      armR_upper: 16 + 16 * Math.sin(u * Math.PI * 2),
     }),
   },
 
@@ -473,8 +475,8 @@ export function createChoreo(rig) {
       head: 11 * tickSign * detail + 2.4 * breath - 5 * dip + 5 * halfBar * energy,
       // Raised hand: up and down through the beat, punching a little harder on
       // the hit itself.
-      armL_upper: STANCE.armL_upper + 38 * pump * pumpAmount + 18 * dip,
-      armL_lower: STANCE.armL_lower + 20 * Math.max(0, -pump) * pumpAmount + 5 * detail,
+      armL_upper: clamp(STANCE.armL_upper + 24 * pump * pumpAmount + 12 * dip, -70, 68),
+      armL_lower: STANCE.armL_lower + 22 * Math.max(0, -pump) * pumpAmount + 5 * detail,
       // Working hand: stays down on the console, shoulder drops into the hit,
       // fingers tick with the hats.
       // The working hand pushes down into every hit and jogs the deck between
