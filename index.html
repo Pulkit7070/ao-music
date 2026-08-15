@@ -81,6 +81,10 @@
               <span>Input sensitivity <b id="mic-gain-value">12x</b></span>
               <input id="mic-gain" type="range" min="1" max="48" step="1" value="12" />
             </label>
+            <label class="control" for="assumed-tempo">
+              <span>Tempo to use when djay is playing but the mic hears nothing</span>
+              <input id="assumed-tempo" type="number" min="60" max="200" step="1" placeholder="120" />
+            </label>
             <label class="control control--check" for="react-all">
               <input id="react-all" type="checkbox" />
               <span>React to any sound, not only to music</span>

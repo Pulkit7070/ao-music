@@ -10,6 +10,7 @@ import { createAsciiStage } from './ascii.js';
 import { createChoreo } from './choreo.js';
 import { createQueueStore, mountQueueUI } from './queue.js';
 import { createNowPlaying } from './nowplaying.js';
+import { createPulse } from './pulse.js';
 
 const ROUTES = ['dj', 'party'];
 const $ = (id) => document.getElementById(id);
@@ -233,10 +234,10 @@ const GESTURE_WORDS = {
 function stateLabel(s) {
   // Nothing is coming in at all. Saying "looking around the room" here reads as
   // normal behaviour when the real answer is that he cannot hear anything.
-  if (deck.getState().source !== 'mic' && s.level < 0.004) {
+  if (!drivenByBooth && deck.getState().source !== 'mic' && s.level < 0.004) {
     return 'no input: press Enable microphone';
   }
-  if (deck.getState().source === 'mic' && s.level < 0.004 && s.quietFor > 3) {
+  if (!drivenByBooth && deck.getState().source === 'mic' && s.level < 0.004 && s.quietFor > 3) {
     return 'microphone on, but hearing nothing';
   }
   if (s.gesture && GESTURE_WORDS[s.gesture]) return GESTURE_WORDS[s.gesture];
@@ -251,14 +252,35 @@ function stateLabel(s) {
 
 // -- one loop for the page ----------------------------------------------------
 
+// When the booth says a deck is running but nothing is reaching the microphone,
+// the mascot is driven from a generated beat instead of standing through the
+// whole set. Real audio always wins: the moment anything arrives at the input,
+// this steps aside.
+const pulse = createPulse();
+const tempoInput = $('assumed-tempo');
+let heardBpm = 0;
+let drivenByBooth = false;
+
+function assumedTempo() {
+  const typed = Number(tempoInput.value);
+  if (Number.isFinite(typed) && typed >= 60 && typed <= 200) return typed;
+  return heardBpm || 120;
+}
+
 let lastFrame = performance.now();
 let clock = 0;
 
-deck.subscribe((f) => {
+deck.subscribe((live) => {
   const nowMs = performance.now();
   const dt = Math.min(0.1, Math.max(0.001, (nowMs - lastFrame) / 1000));
   lastFrame = nowMs;
   clock += dt;
+
+  const hearingSomething = live.rms > 0.006;
+  const boothPlaying = Boolean(booth && booth.current);
+  drivenByBooth = boothPlaying && !hearingSomething;
+  if (hearingSomething && live.bpm) heardBpm = live.bpm;
+  const f = drivenByBooth ? pulse.tick(dt, assumedTempo()) : live;
 
   const state = choreo.update(f, dt, clock);
   view.update(f, state, dt, rig);
@@ -291,8 +313,9 @@ deck.subscribe((f) => {
     readBpm.textContent = `${f.bpm.toFixed(0)} BPM`;
     readBeats.textContent = String(beats);
     readPulse.textContent = state.music.toFixed(2);
-    readState.textContent = label;
-    partyState.textContent = label;
+    const suffix = drivenByBooth ? ` (to djay at ${assumedTempo()} BPM, not listening)` : '';
+    readState.textContent = label + suffix;
+    partyState.textContent = label + suffix;
   }
 });
 

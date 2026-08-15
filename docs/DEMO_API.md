@@ -282,6 +282,21 @@ only knows what was asked for. Requests carry an optional link; only `http` and
 `https` survive, so a `javascript:` URL typed into that box never reaches an
 href.
 
+## When there is nothing to listen to
+
+The monitor reports that a deck is running, its title and how much is left. It
+carries no audio and no tempo, so it cannot say where the beat is. When it says
+a track is playing and nothing is arriving at the microphone, `src/pulse.js`
+generates a beat and the mascot dances to that instead of standing through the
+whole set. It emits the console's Features shape, so nothing downstream needs a
+special case.
+
+Real audio always wins: the moment anything reaches the input, the generated
+pulse steps aside. The state line says which is which, "(to djay at 120 BPM, not
+listening)", because a mascot dancing to an assumed tempo should not be mistaken
+for one hearing the room. The tempo is taken from the box on the DJ page, or the
+last tempo the microphone detected, or 120.
+
 ## Choreography note
 
 `src/choreo.js` is the motion for this demo, and it deliberately has no dance

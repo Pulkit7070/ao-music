@@ -424,6 +424,11 @@ h2 {
   background: transparent;
 }
 
+.control input[type='number'] {
+  width: 90px;
+  padding: 5px 8px;
+}
+
 .control input[type='checkbox'] {
   accent-color: var(--accent);
   width: 14px;
