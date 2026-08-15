@@ -235,6 +235,14 @@ top of that file, plus `headers` and `pollSeconds` if the endpoint needs them,
 or call `window.aoDisco.nowPlaying.configure({ url })` from the console to try
 one without editing anything.
 
+Paste the base address, `/api/health` or `/api/status`: the other is derived,
+so nobody has to remember which one the page wants. Tracks come from `status`,
+reachability from `health`, and the Check button on the party page probes health
+on demand. It reports what the track feed cannot: whether the monitor is up at
+all, and whether djay Pro is running behind it. A failed poll asks health for
+the reason, so "monitor unreachable" and "djay Pro is not running" never look
+like the same fault.
+
 The endpoint must allow this origin with CORS. Any response shape is fine as
 long as `normalise()` can find a title: it already accepts the usual wrappers
 (`track`, `item`, `data`, `nowPlaying`) and the usual spellings of title,

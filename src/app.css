@@ -602,6 +602,11 @@ form .button {
   margin: 0;
 }
 
+.booth__buttons {
+  display: flex;
+  gap: 6px;
+}
+
 .ticker__next .is-cued {
   color: var(--accent);
   opacity: 1;

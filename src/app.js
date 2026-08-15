@@ -431,6 +431,18 @@ boothForm.addEventListener('submit', (event) => {
   nowPlaying.configure({ url: boothUrlInput.value.trim() });
 });
 
+// Ask /api/health directly. Answers what the track feed cannot: is the monitor
+// even up, and is djay running behind it.
+$('booth-check').addEventListener('click', async () => {
+  feedStatus.dataset.live = 'no';
+  feedStatus.textContent = 'Checking the monitor...';
+  const typed = boothUrlInput.value.trim();
+  if (typed) nowPlaying.configure({ url: typed });
+  const probe = await nowPlaying.checkHealth();
+  feedStatus.dataset.live = probe.ok && probe.djayRunning ? 'yes' : 'no';
+  feedStatus.textContent = `Health check: ${probe.note}`;
+});
+
 store.subscribe(renderTicker);
 
 // Another tab or window on the same laptop stays in sync.

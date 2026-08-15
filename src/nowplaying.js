@@ -20,6 +20,18 @@
 
 const STORAGE_KEY = 'ao.disco.booth.url';
 
+/**
+ * Accept whatever is pasted in: the base address, /api/health or /api/status.
+ * Tracks come from status, reachability from health, and one is derived from
+ * the other so nobody has to know which is which.
+ */
+export function endpointsFor(url) {
+  const text = String(url || '').trim().replace(/\/+$/, '');
+  if (!text) return { status: '', health: '' };
+  const base = text.replace(/\/api\/(status|health|current|upcoming)$/i, '');
+  return { status: `${base}/api/status`, health: `${base}/api/health` };
+}
+
 export const CONFIG = {
   // djay-monitor, on the machine running djay Pro. Change it on the party page
   // or with ?booth=... in the address; whatever is set there is remembered.
@@ -125,6 +137,7 @@ export function createNowPlaying(config = {}) {
   let settings = { ...CONFIG, url: resolveUrl(), ...config };
   let timer = 0;
   let state = null;
+  let health = null;
   let status = settings.url ? 'connecting' : 'off';
   const listeners = new Set();
 
@@ -153,14 +166,45 @@ export function createNowPlaying(config = {}) {
     return location.protocol === 'https:' && /^http:\/\//i.test(url);
   }
 
+  /**
+   * Ask /api/health. It answers the question the status endpoint cannot: is the
+   * monitor even up, and is djay running behind it. Returns a plain sentence,
+   * because that is what ends up in front of the DJ.
+   */
+  async function checkHealth() {
+    const { health: url } = endpointsFor(settings.url);
+    if (!url) return { ok: false, note: 'no address set' };
+    if (blockedByMixedContent(url)) {
+      return { ok: false, note: 'blocked: this page is https and the monitor is http' };
+    }
+    try {
+      const response = await fetch(url, { headers: settings.headers, cache: 'no-store' });
+      if (!response.ok) return { ok: false, note: `monitor answered ${response.status}` };
+      const body = await response.json();
+      health = body;
+      return {
+        ok: Boolean(body && body.ok),
+        djayRunning: Boolean(body && body.djayRunning),
+        note: !body || !body.ok
+          ? 'monitor is up but reports a problem'
+          : body.djayRunning
+            ? `monitor up, djay running, ${body.status || 'unknown'}`
+            : 'monitor up, but djay Pro is not running',
+      };
+    } catch (error) {
+      return { ok: false, note: `monitor unreachable: ${error.message}` };
+    }
+  }
+
   async function poll() {
     if (!settings.url) return;
-    if (blockedByMixedContent(settings.url)) {
+    const { status: statusUrl } = endpointsFor(settings.url);
+    if (blockedByMixedContent(statusUrl)) {
       setStatus('blocked: this page is https and the booth is http');
       return;
     }
     try {
-      const response = await fetch(settings.url, { headers: settings.headers, cache: 'no-store' });
+      const response = await fetch(statusUrl, { headers: settings.headers, cache: 'no-store' });
       if (!response.ok) {
         setStatus(`error ${response.status}`);
         return;
@@ -171,9 +215,11 @@ export function createNowPlaying(config = {}) {
       status = !next ? 'unreadable response' : next.current ? 'live' : next.running ? 'djay idle' : 'djay not running';
       if (changed) announce();
     } catch (error) {
-      // Unreachable, wrong network, or CORS. Keep the last known track rather
-      // than blanking the stage over one failed request.
-      setStatus(`unreachable: ${error.message}`);
+      // Unreachable, wrong network, or CORS. Ask health for the reason, and
+      // keep the last known track rather than blanking the stage over one
+      // failed request.
+      const probe = await checkHealth();
+      setStatus(probe.note || `unreachable: ${error.message}`);
     }
   }
 
@@ -210,6 +256,9 @@ export function createNowPlaying(config = {}) {
       cb(state, status);
       return () => listeners.delete(cb);
     },
+    /** Probe /api/health on demand and report it in a sentence. */
+    checkHealth,
+    getHealth: () => health,
     getState: () => state,
     getStatus: () => status,
     getUrl: () => settings.url,

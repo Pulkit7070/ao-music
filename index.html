@@ -164,7 +164,10 @@
           <form class="booth" id="booth-form">
             <label for="booth-url">djay Pro monitor</label>
             <input id="booth-url" type="url" inputmode="url" placeholder="http://host:7474/api/status" />
-            <button type="submit" class="button button--ghost">Connect</button>
+            <span class="booth__buttons">
+              <button type="submit" class="button button--ghost">Connect</button>
+              <button type="button" class="button button--ghost" id="booth-check">Check</button>
+            </span>
           </form>
           <div class="queue__now" id="queue-now"></div>
           <p class="queue__label">Up next</p>
