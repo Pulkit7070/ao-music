@@ -9,6 +9,7 @@ import { createConsole } from './console.js';
 import { createAsciiStage } from './ascii.js';
 import { createChoreo } from './choreo.js';
 import { createQueueStore, mountQueueUI } from './queue.js';
+import { createNowPlaying } from './nowplaying.js';
 
 const ROUTES = ['dj', 'party'];
 const $ = (id) => document.getElementById(id);
@@ -271,6 +272,7 @@ mountQueueUI(store, {
   form: $('request-form'),
   name: $('request-name'),
   song: $('request-song'),
+  link: $('request-link'),
   feedback: $('request-feedback'),
   now: $('queue-now'),
   list: $('queue-list'),
@@ -278,28 +280,46 @@ mountQueueUI(store, {
   clear: $('queue-clear'),
 });
 
+// What is playing, straight from the booth when the API is connected. Until
+// then the head of the queue stands in, so the stage reads the same either way
+// and nobody has to type the track by hand.
+const nowPlaying = createNowPlaying();
+const feedStatus = $('feed-status');
+let liveTrack = null;
+
+
 // The stage ticker: what is on and what is coming, readable from the floor on
 // both routes.
 const queueBadge = $('queue-badge');
 const stageNow = $('stage-now');
 const stageNext = $('stage-next');
 
-store.subscribe(() => {
+function renderTicker() {
   const pending = store.pending();
   const waiting = pending.length;
   queueBadge.textContent = waiting ? String(waiting) : '';
   queueBadge.hidden = waiting === 0;
 
-  const current = pending[0];
+  const queued = pending[0];
+  // The booth wins when it is reporting: it knows what is actually on the
+  // speakers, the queue only knows what was asked for.
+  const current = liveTrack
+    ? { song: liveTrack.title, name: liveTrack.artist || 'live from the booth', fromApi: true }
+    : queued;
+
   stageNow.textContent = current ? current.song : 'Nothing queued yet';
   if (current) {
     const by = document.createElement('small');
-    by.textContent = `requested by ${current.name}`;
+    by.textContent = current.fromApi
+      ? current.name
+      : `requested by ${current.name}`;
     stageNow.appendChild(by);
   }
 
   stageNext.textContent = '';
-  const upNext = pending.slice(1, 4);
+  // With a live track on, nothing in the queue has been played yet, so the
+  // whole queue is still up next.
+  const upNext = (liveTrack ? pending : pending.slice(1)).slice(0, 3);
   if (!upNext.length) {
     const li = document.createElement('li');
     li.textContent = waiting ? 'nothing else yet' : 'take requests on the party page';
@@ -311,7 +331,21 @@ store.subscribe(() => {
       stageNext.appendChild(li);
     }
   }
+}
+
+nowPlaying.subscribe((track, status) => {
+  liveTrack = track && track.playing ? track : null;
+  feedStatus.dataset.live = liveTrack ? 'yes' : 'no';
+  feedStatus.textContent = nowPlaying.isEnabled()
+    ? liveTrack
+      ? `Live from the booth: ${liveTrack.title}${liveTrack.artist ? ` - ${liveTrack.artist}` : ''}`
+      : `Booth feed connected, ${status}. Showing the queue meanwhile.`
+    : 'Now playing is taken from the queue. Connect the booth API in src/nowplaying.js and it will report the live track instead.';
+  renderTicker();
 });
+nowPlaying.start();
+
+store.subscribe(renderTicker);
 
 // Another tab or window on the same laptop stays in sync.
 window.addEventListener('storage', (event) => {
@@ -344,4 +378,4 @@ window.addEventListener('hashchange', applyRoute);
 applyRoute();
 
 // Handy for poking at the demo from the console.
-window.aoDisco = { rig, deck, store, choreo, view };
+window.aoDisco = { rig, deck, store, choreo, view, nowPlaying };

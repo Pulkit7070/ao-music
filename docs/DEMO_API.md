@@ -21,6 +21,7 @@ src/app.js          routing, wiring, the single console and the single loop
 src/ascii.js        the ASCII stage: rasterises the rig into a character grid
 src/choreo.js       audio-reactive DJ motion, no dance cycle
 src/queue.js        party request queue, persisted in localStorage
+src/nowplaying.js   booth API adapter for the live track, off until configured
 src/app.css         page and stage styling
 ```
 
@@ -224,6 +225,27 @@ Features = {
 - `spectrum[i]` covers `i * context.sampleRate / fftSize` Hz.
 
 Unsubscribe with either the returned function or `unsubscribe(cb)`.
+
+## Now playing
+
+`src/nowplaying.js` decides what the stage calls the current track. Until the
+booth API is connected the head of the request queue stands in, which is the
+behaviour with no configuration at all. To connect it, set `CONFIG.url` at the
+top of that file, plus `headers` and `pollSeconds` if the endpoint needs them,
+or call `window.aoDisco.nowPlaying.configure({ url })` from the console to try
+one without editing anything.
+
+The endpoint must allow this origin with CORS. Any response shape is fine as
+long as `normalise()` can find a title: it already accepts the usual wrappers
+(`track`, `item`, `data`, `nowPlaying`) and the usual spellings of title,
+artist and playing. When the real contract arrives, `normalise()` is the one
+function to adjust.
+
+When the feed reports a track the stage shows it and the whole request queue
+becomes up next, because the booth knows what is on the speakers and the queue
+only knows what was asked for. Requests carry an optional link; only `http` and
+`https` survive, so a `javascript:` URL typed into that box never reaches an
+href.
 
 ## Choreography note
 

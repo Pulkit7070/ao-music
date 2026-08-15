@@ -125,6 +125,15 @@
               placeholder="Artist - Title"
               required
             />
+            <label for="request-link">Link <span class="optional">optional</span></label>
+            <input
+              id="request-link"
+              name="link"
+              type="url"
+              maxlength="400"
+              placeholder="https://..."
+              inputmode="url"
+            />
             <button type="submit" class="button">Add to the queue</button>
           </form>
           <p class="status" id="request-feedback" data-tone="idle">
@@ -141,6 +150,10 @@
             <h2>Queue</h2>
             <span class="count" id="queue-count">0 waiting, 0 played</span>
           </div>
+          <p class="feed" id="feed-status">
+            Now playing is taken from the queue. Connect the booth API in
+            <code>src/nowplaying.js</code> and it will report the live track instead.
+          </p>
           <div class="queue__now" id="queue-now"></div>
           <p class="queue__label">Up next</p>
           <ol class="queue__list" id="queue-list"></ol>

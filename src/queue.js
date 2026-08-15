@@ -7,6 +7,21 @@
 const KEY = 'ao.disco.queue.v1';
 const MAX_LEN = 60;
 
+/**
+ * Only http and https survive. A guest types this box, so anything else,
+ * javascript: in particular, must never reach an href.
+ */
+export function safeLink(value) {
+  const text = String(value || '').trim().slice(0, 400);
+  if (!text) return '';
+  try {
+    const url = new URL(text);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : '';
+  } catch {
+    return '';
+  }
+}
+
 function safeParse(raw) {
   if (!raw) return [];
   try {
@@ -18,6 +33,7 @@ function safeParse(raw) {
         id: String(row.id || `${row.at || 0}-${Math.random().toString(36).slice(2, 8)}`),
         name: String(row.name).slice(0, 40),
         song: String(row.song).slice(0, 80),
+        link: safeLink(row.link),
         at: Number(row.at) || 0,
         played: Boolean(row.played),
       }));
@@ -51,7 +67,7 @@ export function createQueueStore() {
       cb(rows);
       return () => listeners.delete(cb);
     },
-    add(name, song) {
+    add(name, song, link) {
       const cleanName = String(name || '').trim().slice(0, 40);
       const cleanSong = String(song || '').trim().slice(0, 80);
       if (!cleanName || !cleanSong) return null;
@@ -60,6 +76,7 @@ export function createQueueStore() {
         id: `${Date.now().toString(36)}-${counter}`,
         name: cleanName,
         song: cleanSong,
+        link: safeLink(link),
         at: Date.now(),
         played: false,
       };
@@ -82,6 +99,17 @@ export function createQueueStore() {
   };
 }
 
+/** An anchor for a stored link. Built with the DOM, never with innerHTML. */
+function linkFor(href) {
+  const a = document.createElement('a');
+  a.className = 'queue__link';
+  a.href = href;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.textContent = 'link';
+  return a;
+}
+
 function timeLabel(at) {
   if (!at) return '';
   const d = new Date(at);
@@ -97,15 +125,20 @@ function timeLabel(at) {
 export function mountQueueUI(store, nodes) {
   nodes.form.addEventListener('submit', (event) => {
     event.preventDefault();
-    const row = store.add(nodes.name.value, nodes.song.value);
+    const typedLink = nodes.link ? nodes.link.value.trim() : '';
+    const row = store.add(nodes.name.value, nodes.song.value, typedLink);
     if (!row) {
       nodes.feedback.textContent = 'Both a name and a song, please.';
       nodes.feedback.dataset.tone = 'warn';
       return;
     }
-    nodes.feedback.textContent = `Queued "${row.song}" for ${row.name}.`;
-    nodes.feedback.dataset.tone = 'ok';
+    const dropped = typedLink && !row.link;
+    nodes.feedback.textContent = dropped
+      ? `Queued "${row.song}" for ${row.name}. The link was not a web address, so it was left off.`
+      : `Queued "${row.song}" for ${row.name}.`;
+    nodes.feedback.dataset.tone = dropped ? 'warn' : 'ok';
     nodes.song.value = '';
+    if (nodes.link) nodes.link.value = '';
     nodes.song.focus();
   });
 
@@ -141,7 +174,9 @@ export function mountQueueUI(store, nodes) {
         <button type="button" data-action="remove">Remove</button>
       </span>`;
     li.querySelector('.queue__song').textContent = entry.song;
-    li.querySelector('.queue__by').textContent = `${entry.name} - ${timeLabel(entry.at)}`;
+    const by = li.querySelector('.queue__by');
+    by.textContent = `${entry.name} - ${timeLabel(entry.at)}`;
+    if (entry.link) by.appendChild(linkFor(entry.link));
     return li;
   }
 
@@ -162,7 +197,9 @@ export function mountQueueUI(store, nodes) {
           <button type="button" data-action="remove">Remove</button>
         </span>`;
       nodes.now.querySelector('.queue__now-song').textContent = current.song;
-      nodes.now.querySelector('.queue__now-by').textContent = `requested by ${current.name}`;
+      const nowBy = nodes.now.querySelector('.queue__now-by');
+      nowBy.textContent = `requested by ${current.name}`;
+      if (current.link) nowBy.appendChild(linkFor(current.link));
     } else {
       delete nodes.now.dataset.id;
       nodes.now.innerHTML =
