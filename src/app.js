@@ -231,6 +231,14 @@ const GESTURE_WORDS = {
 };
 
 function stateLabel(s) {
+  // Nothing is coming in at all. Saying "looking around the room" here reads as
+  // normal behaviour when the real answer is that he cannot hear anything.
+  if (deck.getState().source !== 'mic' && s.level < 0.004) {
+    return 'no input: press Enable microphone';
+  }
+  if (deck.getState().source === 'mic' && s.level < 0.004 && s.quietFor > 3) {
+    return 'microphone on, but hearing nothing';
+  }
   if (s.gesture && GESTURE_WORDS[s.gesture]) return GESTURE_WORDS[s.gesture];
   if (!s.live && s.quietFor > 0.6) return s.gesture ? 'idle gesture' : 'still, waiting for sound';
   // Loud but arrhythmic is a room, not a track, and he ignores it on purpose.
@@ -420,8 +428,10 @@ nowPlaying.subscribe((state, status) => {
       ? `djay Pro, deck ${state.current.deck}: ${state.current.title}${
           state.current.artist ? ` - ${state.current.artist}` : ''
         }${state.current.remaining ? ` (${state.current.remaining})` : ''}`
-      : `Booth feed: ${status}. Showing the queue meanwhile.`;
-  boothUrlInput.placeholder = nowPlaying.getUrl() || 'http://host:7474/api/status';
+      : `Booth feed at ${nowPlaying.getUrl() || 'no address'}: ${status}. Showing the queue meanwhile.`;
+  // Show the address in the field, not just as a placeholder: a feed pointed at
+  // the wrong host looks exactly like a feed that is down.
+  if (document.activeElement !== boothUrlInput) boothUrlInput.value = nowPlaying.getUrl();
   renderTicker();
 });
 nowPlaying.start();
