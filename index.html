@@ -150,10 +150,12 @@
             <h2>Queue</h2>
             <span class="count" id="queue-count">0 waiting, 0 played</span>
           </div>
-          <p class="feed" id="feed-status">
-            Now playing is taken from the queue. Connect the booth API in
-            <code>src/nowplaying.js</code> and it will report the live track instead.
-          </p>
+          <p class="feed" id="feed-status">Booth feed connecting...</p>
+          <form class="booth" id="booth-form">
+            <label for="booth-url">djay Pro monitor</label>
+            <input id="booth-url" type="url" inputmode="url" placeholder="http://host:7474/api/status" />
+            <button type="submit" class="button button--ghost">Connect</button>
+          </form>
           <div class="queue__now" id="queue-now"></div>
           <p class="queue__label">Up next</p>
           <ol class="queue__list" id="queue-list"></ol>

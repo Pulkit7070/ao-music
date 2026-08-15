@@ -285,7 +285,9 @@ mountQueueUI(store, {
 // and nobody has to type the track by hand.
 const nowPlaying = createNowPlaying();
 const feedStatus = $('feed-status');
-let liveTrack = null;
+const boothForm = $('booth-form');
+const boothUrlInput = $('booth-url');
+let booth = null;
 
 
 // The stage ticker: what is on and what is coming, readable from the floor on
@@ -301,49 +303,69 @@ function renderTicker() {
   queueBadge.hidden = waiting === 0;
 
   const queued = pending[0];
+  const live = booth && booth.current;
   // The booth wins when it is reporting: it knows what is actually on the
-  // speakers, the queue only knows what was asked for.
-  const current = liveTrack
-    ? { song: liveTrack.title, name: liveTrack.artist || 'live from the booth', fromApi: true }
+  // decks, the queue only knows what was asked for.
+  const current = live
+    ? {
+        song: live.title,
+        name: [live.artist, live.remaining].filter(Boolean).join('  '),
+        fromApi: true,
+      }
     : queued;
 
   stageNow.textContent = current ? current.song : 'Nothing queued yet';
   if (current) {
     const by = document.createElement('small');
-    by.textContent = current.fromApi
-      ? current.name
-      : `requested by ${current.name}`;
+    by.textContent = current.fromApi ? current.name : `requested by ${current.name}`;
     stageNow.appendChild(by);
   }
 
   stageNext.textContent = '';
+  // The track cued on the other deck is genuinely next, ahead of anything that
+  // was merely asked for, so it goes first and says where it came from.
+  const cued = booth && booth.upcoming;
+  if (cued) {
+    const li = document.createElement('li');
+    li.className = 'is-cued';
+    li.textContent = `${cued.title}${cued.artist ? ` / ${cued.artist}` : ''} / cued on deck ${cued.deck}`;
+    stageNext.appendChild(li);
+  }
   // With a live track on, nothing in the queue has been played yet, so the
   // whole queue is still up next.
-  const upNext = (liveTrack ? pending : pending.slice(1)).slice(0, 3);
-  if (!upNext.length) {
+  const upNext = (live ? pending : pending.slice(1)).slice(0, cued ? 2 : 3);
+  for (const row of upNext) {
+    const li = document.createElement('li');
+    li.textContent = `${row.song} / ${row.name}`;
+    stageNext.appendChild(li);
+  }
+  if (!cued && !upNext.length) {
     const li = document.createElement('li');
     li.textContent = waiting ? 'nothing else yet' : 'take requests on the party page';
     stageNext.appendChild(li);
-  } else {
-    for (const row of upNext) {
-      const li = document.createElement('li');
-      li.textContent = `${row.song} / ${row.name}`;
-      stageNext.appendChild(li);
-    }
   }
 }
 
-nowPlaying.subscribe((track, status) => {
-  liveTrack = track && track.playing ? track : null;
-  feedStatus.dataset.live = liveTrack ? 'yes' : 'no';
-  feedStatus.textContent = nowPlaying.isEnabled()
-    ? liveTrack
-      ? `Live from the booth: ${liveTrack.title}${liveTrack.artist ? ` - ${liveTrack.artist}` : ''}`
-      : `Booth feed connected, ${status}. Showing the queue meanwhile.`
-    : 'Now playing is taken from the queue. Connect the booth API in src/nowplaying.js and it will report the live track instead.';
+nowPlaying.subscribe((state, status) => {
+  booth = state;
+  const on = Boolean(state && state.current);
+  feedStatus.dataset.live = on ? 'yes' : 'no';
+  feedStatus.textContent = !nowPlaying.isEnabled()
+    ? 'Booth feed off. Now playing comes from the queue.'
+    : on
+      ? `djay Pro, deck ${state.current.deck}: ${state.current.title}${
+          state.current.artist ? ` - ${state.current.artist}` : ''
+        }${state.current.remaining ? ` (${state.current.remaining})` : ''}`
+      : `Booth feed: ${status}. Showing the queue meanwhile.`;
+  boothUrlInput.placeholder = nowPlaying.getUrl() || 'http://host:7474/api/status';
   renderTicker();
 });
 nowPlaying.start();
+
+boothForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  nowPlaying.configure({ url: boothUrlInput.value.trim() });
+});
 
 store.subscribe(renderTicker);
 

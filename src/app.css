@@ -569,6 +569,26 @@ form .button {
   border-left-color: var(--accent);
 }
 
+.booth {
+  grid-template-columns: 1fr auto;
+  gap: 6px 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.booth label {
+  grid-column: 1 / -1;
+}
+
+.booth .button {
+  margin: 0;
+}
+
+.ticker__next .is-cued {
+  color: var(--accent);
+  opacity: 1;
+}
+
 .queue__link {
   margin-left: 8px;
   color: var(--accent);

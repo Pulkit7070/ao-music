@@ -1,83 +1,137 @@
-// What is actually playing right now.
+// What is actually playing right now, read from djay Pro.
 //
-// The DJ should not have to tell the page which track is on. When the API is
-// available this polls it and the stage shows whatever it reports; until then
-// it stays switched off and the queue drives the display, which is the current
-// behaviour unchanged.
+// The DJ does not tell this page which track is on. `djay-monitor` watches
+// djay Pro over the macOS Accessibility API and reports it; this polls that and
+// the stage shows whatever it says. When the feed is off or unreachable, the
+// head of the request queue stands in, so the page always has something to say.
 //
-// ---------------------------------------------------------------------------
-// TO CONNECT THE API, EDIT THIS BLOCK. Nothing else needs to change.
-// ---------------------------------------------------------------------------
-export const CONFIG = {
-  // The endpoint that reports the current track. Null keeps the feed off.
-  // Example: 'https://api.example.com/v1/now-playing'
-  url: null,
+// The one endpoint worth polling is /api/status: it carries the playing track,
+// the cued track and both decks in a single response.
+//
+//   {
+//     updatedAt: "2026-08-15T10:12:09.043Z",
+//     djayRunning: true,
+//     decks: { "1": { title, artist, elapsed, remaining, key, loaded, playing },
+//              "2": { ... } },
+//     playingDeck: 2 | null,
+//     current:  { deck, title, artist, key, elapsed, remaining } | null,
+//     upcoming: { deck, title, artist, key, elapsed, remaining } | null
+//   }
 
-  // Anything the endpoint needs, e.g. { Authorization: 'Bearer abc123' }.
-  // Do not put a secret here if this page is ever served publicly: it is
+const STORAGE_KEY = 'ao.disco.booth.url';
+
+export const CONFIG = {
+  // djay-monitor, on the machine running djay Pro. Change it on the party page
+  // or with ?booth=... in the address; whatever is set there is remembered.
+  url: 'http://192.168.88.14:7474/api/status',
+
+  // Anything the endpoint needs. Do not put a real secret here: this page is
   // readable by anyone who opens the tab.
   headers: {},
 
-  // How often to ask, in seconds. Most now-playing APIs are rate limited, and
-  // a track change does not need to land in under a second.
-  pollSeconds: 10,
-
-  // The endpoint must send CORS headers that allow this origin, or the browser
-  // will block the response before this code ever sees it.
+  // djay-monitor re-reads djay every 2 s by default, so asking more often than
+  // that only adds traffic.
+  pollSeconds: 3,
 };
 
-/**
- * Map a response body to the shape the page uses. The real API shape is not
- * known yet, so this accepts the handful of spellings these endpoints usually
- * use and is the single place to adjust when the contract arrives.
- *
- * Wanted shape:
- *   { title: string, artist?: string, url?: string, playing?: boolean }
- */
-export function normalise(body) {
-  if (!body || typeof body !== 'object') return null;
-  // Some APIs wrap the track, e.g. { item: {...} } or { data: { track: {...} } }
-  const track = body.track || body.item || body.nowPlaying || body.now_playing || body.data || body;
-  if (!track || typeof track !== 'object') return null;
+/** Pull the endpoint out of the address bar, then out of what was saved. */
+export function resolveUrl(defaultUrl = CONFIG.url) {
+  try {
+    const fromQuery = new URLSearchParams(location.search).get('booth');
+    if (fromQuery !== null) {
+      const cleaned = fromQuery.trim();
+      localStorage.setItem(STORAGE_KEY, cleaned);
+      return cleaned;
+    }
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved !== null) return saved;
+  } catch {
+    // storage can be unavailable; the default is fine
+  }
+  return defaultUrl;
+}
 
-  const title = track.title || track.name || track.song || '';
+export function rememberUrl(url) {
+  try {
+    localStorage.setItem(STORAGE_KEY, String(url || '').trim());
+  } catch {
+    // nothing to do, the value still applies for this session
+  }
+}
+
+function track(raw, deckFallback) {
+  if (!raw || typeof raw !== 'object') return null;
+  const title = String(raw.title || '').trim();
   if (!title) return null;
-
-  const artistField = track.artist || track.artists || track.artistName || '';
-  const artist = Array.isArray(artistField)
-    ? artistField.map((a) => (typeof a === 'string' ? a : a && a.name)).filter(Boolean).join(', ')
-    : String(artistField || '');
-
-  const playing = track.playing ?? track.isPlaying ?? track.is_playing ?? true;
-
   return {
-    title: String(title).slice(0, 120),
-    artist: artist.slice(0, 120),
-    url: typeof track.url === 'string' ? track.url : typeof track.link === 'string' ? track.link : '',
-    playing: Boolean(playing),
+    title: title.slice(0, 120),
+    artist: String(raw.artist || '').trim().slice(0, 120),
+    remaining: String(raw.remaining || '').trim(),
+    elapsed: String(raw.elapsed || '').trim(),
+    key: String(raw.key || '').trim(),
+    deck: raw.deck ?? deckFallback ?? null,
   };
 }
 
 /**
- * Poll the endpoint and report changes.
+ * Map a /api/status body to what the page needs. This is the one function to
+ * change if the API shape moves.
+ */
+export function normalise(body) {
+  if (!body || typeof body !== 'object') return null;
+
+  const decks = body.decks && typeof body.decks === 'object' ? body.decks : {};
+  let current = track(body.current);
+  let upcoming = track(body.upcoming);
+
+  // Fall back to reading the decks directly, in case only the deck map is
+  // populated: whichever deck is playing is current, a loaded one is next.
+  if (!current) {
+    for (const id of Object.keys(decks)) {
+      if (decks[id] && decks[id].playing) {
+        current = track(decks[id], Number(id));
+        break;
+      }
+    }
+  }
+  if (!upcoming) {
+    for (const id of Object.keys(decks)) {
+      const deck = decks[id];
+      if (deck && deck.loaded && !deck.playing && (!current || current.deck !== Number(id))) {
+        upcoming = track(deck, Number(id));
+        break;
+      }
+    }
+  }
+
+  return {
+    running: Boolean(body.djayRunning),
+    playingDeck: body.playingDeck ?? null,
+    current,
+    upcoming,
+    updatedAt: typeof body.updatedAt === 'string' ? body.updatedAt : '',
+  };
+}
+
+/**
+ * Poll djay-monitor and report what changes.
  *
- * @param {object} [config] overrides for CONFIG, so a caller can point it
- *   somewhere else at runtime without editing this file
  * @returns {{ start(): void, stop(): void, configure(next: object): void,
- *   subscribe(cb: (track: object|null, status: string) => void): () => void,
- *   getTrack(): object|null, getStatus(): string, isEnabled(): boolean }}
+ *   subscribe(cb: (state: object|null, status: string) => void): () => void,
+ *   getState(): object|null, getStatus(): string, getUrl(): string,
+ *   isEnabled(): boolean }}
  */
 export function createNowPlaying(config = {}) {
-  let settings = { ...CONFIG, ...config };
+  let settings = { ...CONFIG, url: resolveUrl(), ...config };
   let timer = 0;
-  let track = null;
-  let status = settings.url ? 'idle' : 'off';
+  let state = null;
+  let status = settings.url ? 'connecting' : 'off';
   const listeners = new Set();
 
   function announce() {
     for (const cb of listeners) {
       try {
-        cb(track, status);
+        cb(state, status);
       } catch (error) {
         console.error('[ao-nowplaying] listener threw', error);
       }
@@ -90,25 +144,35 @@ export function createNowPlaying(config = {}) {
     announce();
   }
 
+  /**
+   * An https page cannot fetch an http address: the browser blocks it as mixed
+   * content before the request leaves. Worth saying plainly, because the
+   * failure otherwise looks like the API being down.
+   */
+  function blockedByMixedContent(url) {
+    return location.protocol === 'https:' && /^http:\/\//i.test(url);
+  }
+
   async function poll() {
     if (!settings.url) return;
+    if (blockedByMixedContent(settings.url)) {
+      setStatus('blocked: this page is https and the booth is http');
+      return;
+    }
     try {
-      const response = await fetch(settings.url, {
-        headers: settings.headers,
-        cache: 'no-store',
-      });
+      const response = await fetch(settings.url, { headers: settings.headers, cache: 'no-store' });
       if (!response.ok) {
         setStatus(`error ${response.status}`);
         return;
       }
       const next = normalise(await response.json());
-      const changed = JSON.stringify(next) !== JSON.stringify(track);
-      track = next;
-      status = next ? 'live' : 'nothing playing';
+      const changed = JSON.stringify(next) !== JSON.stringify(state);
+      state = next;
+      status = !next ? 'unreadable response' : next.current ? 'live' : next.running ? 'djay idle' : 'djay not running';
       if (changed) announce();
     } catch (error) {
-      // Network failure, CORS, or a body that is not JSON. Keep the last known
-      // track rather than blanking the stage on one bad request.
+      // Unreachable, wrong network, or CORS. Keep the last known track rather
+      // than blanking the stage over one failed request.
       setStatus(`unreachable: ${error.message}`);
     }
   }
@@ -116,11 +180,12 @@ export function createNowPlaying(config = {}) {
   function start() {
     stop();
     if (!settings.url) {
+      state = null;
       setStatus('off');
       return;
     }
     poll();
-    timer = setInterval(poll, Math.max(2, settings.pollSeconds) * 1000);
+    timer = setInterval(poll, Math.max(1, settings.pollSeconds) * 1000);
   }
 
   function stop() {
@@ -131,20 +196,23 @@ export function createNowPlaying(config = {}) {
   return {
     start,
     stop,
-    /** Point it at an endpoint at runtime, e.g. from the browser console. */
+    /** Point it somewhere else, and remember it for next time. */
     configure(next) {
       settings = { ...settings, ...next };
-      track = null;
+      if ('url' in next) rememberUrl(next.url);
+      state = null;
+      status = settings.url ? 'connecting' : 'off';
       start();
       announce();
     },
     subscribe(cb) {
       listeners.add(cb);
-      cb(track, status);
+      cb(state, status);
       return () => listeners.delete(cb);
     },
-    getTrack: () => track,
+    getState: () => state,
     getStatus: () => status,
+    getUrl: () => settings.url,
     isEnabled: () => Boolean(settings.url),
   };
 }
