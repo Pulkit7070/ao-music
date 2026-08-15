@@ -12,7 +12,7 @@ import { createQueueStore, mountQueueUI, resolveQueueUrl } from './queue.js';
 import { createNowPlaying } from './nowplaying.js';
 import { createPulse } from './pulse.js';
 
-const ROUTES = ['dj', 'party', 'request'];
+const ROUTES = ['dj', 'party'];
 // The shared queue server, so every phone that scans the QR code writes to the
 // same list the booth reads. Overridden by ?queue=... which is what the QR
 // carries, and which is remembered per device. Empty falls back to this
@@ -394,15 +394,6 @@ function renderTicker() {
     stageNow.appendChild(by);
   }
 
-  // The one line a guest wants above the form: what is on, and what is next.
-  const guestNow = $('guest-now');
-  guestNow.textContent = current ? 'Now playing' : 'Nothing playing right now';
-  if (current) {
-    const what = document.createElement('b');
-    what.textContent = current.song;
-    guestNow.appendChild(what);
-  }
-
   stageNext.textContent = '';
   // The track cued on the other deck is genuinely next, ahead of anything that
   // was merely asked for, so it goes first and says where it came from.
@@ -531,24 +522,15 @@ function currentRoute() {
 function applyRoute() {
   const route = currentRoute();
   document.body.dataset.route = route;
-  // #request is the guest view: the same panel as #party with everything that
-  // belongs to the booth taken away, because the person holding the phone came
-  // to ask for a song, not to run the night.
-  const panelFor = route === 'request' ? 'party' : route;
-  for (const name of ['dj', 'party']) {
-    $(`route-${name}`).hidden = name !== panelFor;
+  for (const name of ROUTES) {
+    $(`route-${name}`).hidden = name !== route;
     const link = document.querySelector(`[data-route-link="${name}"]`);
-    if (link) link.setAttribute('aria-current', name === panelFor ? 'page' : 'false');
+    if (link) link.setAttribute('aria-current', name === route ? 'page' : 'false');
   }
   $('stage-caption').textContent =
     route === 'dj'
       ? 'He is reading the room through the microphone.'
       : 'Same ears, same mascot: the floor can see what the queue is doing.';
-  $('request-heading').textContent = route === 'request' ? 'Ask for a song' : 'Request a track';
-  $('request-hint').textContent =
-    route === 'request'
-      ? 'It goes straight to the booth screen. No app, no account.'
-      : 'Type at this screen, or let guests scan the code.';
 }
 
 window.addEventListener('hashchange', applyRoute);

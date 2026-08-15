@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <title>Request a song</title>
+    <link rel="icon" href="assets/logo/ao-logo.svg" />
+    <link rel="stylesheet" href="src/request.css" />
+  </head>
+  <body>
+    <!--
+      The guest page. Deliberately its own document: a phone that scanned a code
+      to type a song title should not be downloading a mascot, an ASCII
+      renderer, an AudioContext and a choreography engine to do it. Nothing here
+      imports any of that, and none of the booth's controls exist to be hidden.
+    -->
+    <main>
+      <header>
+        <p class="eyebrow">AO plays the school disco</p>
+        <h1>Ask for a song</h1>
+      </header>
+
+      <p class="now" id="now">Checking what is playing...</p>
+
+      <form id="form" autocomplete="off">
+        <label for="name">Your name</label>
+        <input id="name" name="name" maxlength="40" placeholder="Priya" required />
+
+        <label for="song">Song</label>
+        <input id="song" name="song" maxlength="80" placeholder="Artist - Title" required />
+
+        <label for="link">Link <span class="optional">optional</span></label>
+        <input id="link" name="link" type="url" inputmode="url" maxlength="400" placeholder="https://..." />
+
+        <button type="submit" class="button">Add to the queue</button>
+      </form>
+
+      <p class="status" id="status" data-tone="idle">It goes straight to the booth. No app, no account.</p>
+
+      <section class="coming">
+        <h2>Coming up</h2>
+        <ol id="list"><li class="empty">Nothing yet. Yours goes straight on.</li></ol>
+      </section>
+    </main>
+
+    <script type="module" src="src/request.js"></script>
+  </body>
+</html>
