@@ -21,14 +21,17 @@
 const SILENCE = 0.014; // RMS below this counts as an empty room
 const LEVEL_SPAN = 0.1; // RMS above SILENCE that maps to full energy
 
-/** Base pose: hands out over the gear, weight settled. */
+/**
+ * Base pose: leaning on the top of the boombox, both hands clear of it so they
+ * stay visible above the cabinet.
+ */
 const STANCE = {
   torso: 0,
   head: 0,
-  armL_upper: -66,
-  armL_lower: 4,
-  armR_upper: 60,
-  armR_lower: 18,
+  armL_upper: -22,
+  armL_lower: 18,
+  armR_upper: 20,
+  armR_lower: 14,
   legL_upper: 0,
   legL_lower: 0,
   legR_upper: 0,
@@ -37,36 +40,154 @@ const STANCE = {
 
 /**
  * One-shot gestures. `pose` is merged over the reactive pose with the gesture
- * weight, so a gesture only overrides the joints it names.
+ * weight, so a gesture only overrides the joints it names. `pose` may be a
+ * function of u (0..1 through the gesture) for moves that have to travel, like
+ * a wave or a pump.
+ *
+ * Three sets: `drop` fires on a real jump in level, `groove` is picked on the
+ * beat every few bars while a track is running, `idle` only happens in a quiet
+ * room. Ten moves in total, drawn without immediate repeats, so a floor
+ * watching for a few minutes does not see the same thing twice in a row.
  */
 const GESTURES = {
-  // The drop reaction. Nothing else in the rig ever throws an arm up.
-  handUp: {
-    dur: 1.6,
-    rise: 0.12,
-    fall: 0.45,
-    pose: { armR_upper: -116, armR_lower: -30, head: -9, torso: -5 },
-    lift: -13,
+  // -- drop reactions --------------------------------------------------------
+  handsUp: {
+    set: 'drop',
+    dur: 1.7,
+    rise: 0.1,
+    fall: 0.4,
+    pose: { armL_upper: 118, armL_lower: 45, armR_upper: -108, armR_lower: -38, head: -7, torso: 0 },
+    lift: -12,
     stretch: -0.14,
   },
-  // Idle: pushes the on-ear cup with the free hand.
+  pointUp: {
+    set: 'drop',
+    dur: 1.5,
+    rise: 0.1,
+    fall: 0.45,
+    pose: { armR_upper: -128, armR_lower: -8, armL_upper: -34, head: -9, torso: -4 },
+    lift: -8,
+    stretch: -0.1,
+  },
+  fistPump: {
+    set: 'drop',
+    dur: 1.8,
+    rise: 0.12,
+    fall: 0.35,
+    // three pumps of the right arm, timed to the gesture rather than to a clock
+    pose: (u) => ({
+      armR_upper: -78 - 34 * Math.abs(Math.sin(u * Math.PI * 3)),
+      armR_lower: -20,
+      armL_upper: -30,
+      head: -5,
+    }),
+    lift: -5,
+  },
+
+  // -- groove moves, on the beat while a track runs --------------------------
+  wave: {
+    set: 'groove',
+    dur: 2,
+    rise: 0.15,
+    fall: 0.3,
+    pose: (u) => ({
+      armR_upper: -96,
+      armR_lower: -28 + 30 * Math.sin(u * Math.PI * 4),
+      head: -4,
+    }),
+  },
+  crowdPoint: {
+    set: 'groove',
+    dur: 1.4,
+    rise: 0.18,
+    fall: 0.35,
+    pose: { armR_upper: -52, armR_lower: 12, torso: 9, head: 11 },
+  },
+  workDeck: {
+    set: 'groove',
+    dur: 1.6,
+    rise: 0.2,
+    fall: 0.3,
+    pose: (u) => ({
+      armR_upper: 52 + 8 * Math.sin(u * Math.PI * 6),
+      armR_lower: 24,
+      torso: 6,
+      head: 9,
+    }),
+  },
+  leanBack: {
+    set: 'groove',
+    dur: 1.9,
+    rise: 0.3,
+    fall: 0.35,
+    pose: { torso: -13, head: -11, armL_upper: -48, armR_upper: 44 },
+    lift: -4,
+  },
+  bounce: {
+    set: 'groove',
+    dur: 1.5,
+    rise: 0.12,
+    fall: 0.25,
+    // two dips through the body rather than through the arms
+    pose: (u) => ({ torso: 7 * Math.sin(u * Math.PI * 4), head: -3 }),
+    liftOf: (u) => 9 * Math.abs(Math.sin(u * Math.PI * 2)),
+    squashOf: (u) => 0.16 * Math.abs(Math.sin(u * Math.PI * 2)),
+  },
+  rollHands: {
+    set: 'groove',
+    dur: 2.1,
+    rise: 0.2,
+    fall: 0.3,
+    pose: (u) => ({
+      armL_upper: 18 + 30 * Math.sin(u * Math.PI * 4),
+      armL_lower: 40,
+      armR_upper: -18 - 30 * Math.cos(u * Math.PI * 4),
+      armR_lower: -26,
+      head: 4 * Math.sin(u * Math.PI * 4),
+    }),
+  },
+  swagger: {
+    set: 'groove',
+    dur: 2.2,
+    rise: 0.25,
+    fall: 0.3,
+    // a slow weight shift side to side, shoulders following
+    pose: (u) => ({
+      torso: 11 * Math.sin(u * Math.PI * 2),
+      head: -6 * Math.sin(u * Math.PI * 2),
+      armL_upper: -22 + 16 * Math.sin(u * Math.PI * 2),
+      armR_upper: 20 + 16 * Math.sin(u * Math.PI * 2),
+    }),
+  },
+
+  // -- idle, only in a quiet room --------------------------------------------
   adjust: {
+    set: 'idle',
     dur: 1.9,
     rise: 0.3,
     fall: 0.35,
     pose: { armL_upper: 24, armL_lower: 104, head: -4, torso: -2 },
     phones: 5,
   },
-  // Idle: glances down at the deck.
   checkDeck: {
+    set: 'idle',
     dur: 1.5,
     rise: 0.3,
     fall: 0.35,
-    pose: { head: 13, torso: 5, armR_upper: 68, armR_lower: 26 },
+    pose: { head: 13, torso: 5, armR_upper: 58, armR_lower: 26 },
+  },
+  lookAround: {
+    set: 'idle',
+    dur: 2.4,
+    rise: 0.3,
+    fall: 0.3,
+    pose: (u) => ({ head: 16 * Math.sin(u * Math.PI * 2), torso: 3 * Math.sin(u * Math.PI * 2) }),
   },
 };
 
-const IDLE_GESTURES = ['adjust', 'checkDeck', 'adjust', 'checkDeck', 'adjust'];
+const BY_SET = { drop: [], groove: [], idle: [] };
+for (const key in GESTURES) BY_SET[GESTURES[key].set].push(key);
+
 
 function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
@@ -116,13 +237,23 @@ export function createChoreo(rig) {
   let lastTickAt = -1;
   let lastDropAt = -20; // so the first real drop after page load can still fire
   let nextIdleAt = 6;
-  let idleIndex = 0;
+  let nextGrooveAt = 8;
 
   let gesture = null; // { key, t }
+  const recent = []; // last few gesture keys, so nothing repeats back to back
+
+  /** Pick from a set, avoiding anything used in the last few turns. */
+  function pick(setName) {
+    const options = BY_SET[setName].filter((key) => !recent.includes(key));
+    const bag = options.length ? options : BY_SET[setName];
+    return bag[Math.floor(Math.random() * bag.length)];
+  }
 
   function startGesture(key, now) {
     gesture = { key, t: 0 };
-    if (key === 'handUp') lastDropAt = now;
+    recent.push(key);
+    if (recent.length > 3) recent.shift();
+    if (GESTURES[key].set === 'drop') lastDropAt = now;
   }
 
   function update(f, dt, now) {
@@ -241,18 +372,26 @@ export function createChoreo(rig) {
     energyLag = smooth(energyLag, energy, 3, step);
     const jumped =
       loudFast > loudLag * 1.9 + 0.03 && energy > energyLag + 0.2 && energy > 0.45 && music > 0.5;
-    if (jumped && now - lastDropAt > 12 && (!gesture || gesture.key !== 'handUp')) {
-      startGesture('handUp', now);
+    if (jumped && now - lastDropAt > 12 && (!gesture || GESTURES[gesture.key].set !== 'drop')) {
+      startGesture(pick('drop'), now);
       flash = 1;
     }
 
     // Idle gestures only exist when the room is quiet, and never as a cycle.
     if (quietFor > 2.5 && !gesture && now > nextIdleAt) {
-      startGesture(IDLE_GESTURES[idleIndex % IDLE_GESTURES.length], now);
-      idleIndex += 1;
-      nextIdleAt = now + 6 + (idleIndex % 3) * 2.5;
+      startGesture(pick('idle'), now);
+      nextIdleAt = now + 7 + Math.random() * 6;
     }
     if (live) nextIdleAt = Math.max(nextIdleAt, now + 5);
+
+    // Groove moves: while a track is actually running, drop one in on a beat
+    // every few bars. Starting on an onset is what makes them land musically
+    // instead of arriving at some arbitrary moment.
+    if (music > 0.5 && energy > 0.35 && !gesture && now > nextGrooveAt && f.beat) {
+      startGesture(pick('groove'), now);
+      nextGrooveAt = now + beatSeconds * (8 + Math.floor(Math.random() * 3) * 4);
+    }
+    if (!(music > 0.5)) nextGrooveAt = Math.max(nextGrooveAt, now + 4);
 
     // --- reactive pose -----------------------------------------------------
     const amp = 0.3 + 0.7 * energy; // sustained loudness widens every range
@@ -307,11 +446,14 @@ export function createChoreo(rig) {
             : u > 1 - spec.fall
               ? smoothstep((1 - u) / spec.fall)
               : 1;
-        for (const joint in spec.pose) {
-          target[joint] = target[joint] + (spec.pose[joint] - target[joint]) * weight;
+        const shape = typeof spec.pose === 'function' ? spec.pose(u) : spec.pose;
+        for (const joint in shape) {
+          target[joint] = target[joint] + (shape[joint] - target[joint]) * weight;
         }
         if (spec.lift) lift += spec.lift * weight;
+        if (spec.liftOf) lift += spec.liftOf(u) * weight;
         if (spec.stretch) squash += spec.stretch * weight;
+        if (spec.squashOf) squash += spec.squashOf(u) * weight;
         if (spec.phones) phoneNudge = spec.phones * weight;
       }
     }

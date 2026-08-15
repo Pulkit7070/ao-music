@@ -89,8 +89,26 @@ let beatFlash = 0;
 let peak = 0;
 let lastText = 0;
 
+// camelCase gesture keys read as plain words in the state line, which also
+// makes it obvious from the page that he has more than one move.
+const GESTURE_WORDS = {
+  handsUp: 'both hands up on the drop',
+  pointUp: 'pointing at the ceiling',
+  fistPump: 'pumping the drop',
+  wave: 'waving at the floor',
+  crowdPoint: 'pointing out at the crowd',
+  workDeck: 'working the deck',
+  leanBack: 'leaning back',
+  bounce: 'bouncing on the beat',
+  rollHands: 'rolling his hands',
+  swagger: 'shifting his weight',
+  adjust: 'adjusting the headphones',
+  checkDeck: 'checking the deck',
+  lookAround: 'looking around the room',
+};
+
 function stateLabel(s) {
-  if (s.gesture === 'handUp') return 'reacting to the drop';
+  if (s.gesture && GESTURE_WORDS[s.gesture]) return GESTURE_WORDS[s.gesture];
   if (!s.live && s.quietFor > 0.6) return s.gesture ? 'idle gesture' : 'still, waiting for sound';
   // Loud but arrhythmic is a room, not a track, and he ignores it on purpose.
   if (s.music < 0.25) return s.level > 0.05 ? 'noise, not music: holding still' : 'listening for a beat';

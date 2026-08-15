@@ -63,11 +63,12 @@ export function createAsciiStage(container) {
   let offY = 0;
   let worldLeft = 0;
   let worldRight = VIEW_W;
-  const FRAME = { cx: 178, top: 40, bottom: 348 };
+  const FRAME = { cx: 186, top: 34, bottom: 362 };
   let density = new Float32Array(0);
   let kind = new Uint8Array(0);
   let noise = new Float32Array(0);
   let shapes = null; // cached rig element list
+  let stars = null; // star cloth, rebuilt whenever the stage resizes
 
   function resize() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -104,6 +105,7 @@ export function createAsciiStage(container) {
         noise[i] = (seed % 1000) / 1000;
       }
     }
+    stars = null;
     ctx2d.textBaseline = 'top';
     const fontSize = Math.min(cellH, cellW / GLYPH_ASPECT) * 1.02;
     ctx2d.font = `${fontSize.toFixed(1)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
@@ -300,87 +302,113 @@ export function createAsciiStage(container) {
 
   let platterAngle = 0;
 
-  function stampBooth(s, dt, tempo) {
-    // The gear stands either side of him rather than in front, so the whole
-    // logo silhouette stays visible: both hands, all four legs, the tail stub.
-
-    // Deck on his right, under the hand that rides the platter. It turns at the
-    // tempo he is hearing, so the speed on screen is the speed of the track.
-    platterAngle += dt * (0.5 + 5.5 * s.energy) * tempo;
-    const px = 318;
-    const py = 236;
-    stampEllipseRing(px, py, 40, 17, 2.2, 0.8, BOOTH);
-    stampEllipseRing(px, py, 14, 6, 1.8, 0.65 + 0.35 * s.kick, BOOTH);
-    const a = platterAngle;
-    stampLine(
-      px + Math.cos(a) * 14, py + Math.sin(a) * 6,
-      px + Math.cos(a) * 38, py + Math.sin(a) * 16,
-      1.8, 1, BOOTH,
-    );
-    stampLine(278, 254, 358, 254, 1.4, 0.5, BOOTH);
-
-    // Mixer on his left: two channel faders and a crossfader, on the values his
-    // left hand is riding.
-    stampLine(22, 202, 22, 244, 1.5, 0.45, BOOTH);
-    stampLine(42, 202, 42, 244, 1.5, 0.45, BOOTH);
-    stampLine(15, 242 - 38 * s.fader, 29, 242 - 38 * s.fader, 2.2, 1, BOOTH);
-    const chB = clamp(s.bass * s.energy + 0.08, 0, 1);
-    stampLine(35, 242 - 38 * chB, 49, 242 - 38 * chB, 2.2, 1, BOOTH);
-    stampLine(12, 254, 74, 254, 1.4, 0.45, BOOTH);
-    const cf = 12 + 56 * s.crossfade;
-    stampLine(cf, 249, cf, 259, 2, 1, BOOTH);
-
-    // Floor: one line under his feet, and nothing else down there.
-    for (let i = 0; i < cols; i++) {
-      const x = vx(i);
-      const n = noise[(Math.floor(gy(318)) * cols + i) % noise.length];
-      if (x > 60 && x < 290 ? true : n < 0.7) put(i, Math.round(gy(318)), 0.55 + 0.3 * s.energy, BOOTH);
+  function makeStars() {
+    // Star cloth behind the booth. Fixed positions, so it reads as a backdrop
+    // rather than as falling snow, with a per-star phase for the twinkle.
+    stars = [];
+    let seed = 20260815;
+    const rand = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return (seed % 10000) / 10000;
+    };
+    const span = worldRight - worldLeft;
+    for (let i = 0; i < 130; i++) {
+      stars.push({
+        x: worldLeft + rand() * span,
+        y: 4 + rand() * 232,
+        phase: rand() * Math.PI * 2,
+        size: rand() < 0.18 ? 2.4 : 1.3,
+      });
     }
   }
 
-  // -- room accents ----------------------------------------------------------
-
-  let ballAngle = 0;
-  let sweep = 0;
-
-  function stampRoom(s, f, dt, tempo, beatFlash) {
-    // Mirror ball: a ring of glints that turns at the tempo.
-    ballAngle += dt * (0.25 + 2.2 * s.energy) * tempo;
-    const bx = 200;
-    const by = 46;
-    stampDisc(bx, by, 6 + 3 * s.kick, 0.9 + 0.3 * beatFlash, ACCENT);
-    const glints = 10;
-    for (let i = 0; i < glints; i++) {
-      const a = ballAngle + (i / glints) * Math.PI * 2;
-      const r = 13 + 5 * Math.sin(a * 2 + ballAngle);
-      stampDisc(bx + Math.cos(a) * r, by + Math.sin(a) * r * 0.8, 0.5 + 0.5 * beatFlash, ACCENT);
+  function stampSky(s, f, now, beatFlash) {
+    if (!stars) makeStars();
+    for (const star of stars) {
+      // Stars breathe slowly on their own and flash together on the beat, so
+      // the backdrop keeps time without stealing attention from the mascot.
+      const twinkle = 0.5 + 0.5 * Math.sin(now * 1.6 + star.phase);
+      const d = 0.28 + 0.3 * twinkle + 0.45 * beatFlash * s.music;
+      stampDisc(star.x, star.y, star.size, d, ACCENT);
     }
+  }
 
-    // Beams: sparse dotted rays that sweep faster the busier the room is.
-    sweep += dt * (0.15 + 0.75 * s.energy) * tempo;
-    const beams = 3;
-    for (let b = 0; b < beams; b++) {
-      const a = Math.sin(sweep + (b * Math.PI * 2) / beams) * 0.65 + (b - 1) * 0.22;
-      const len = 300;
-      const steps = 30;
-      for (let t = 4; t < steps; t++) {
-        const u = t / steps;
-        const x = bx + Math.sin(a) * len * u;
-        const y = by + Math.cos(a) * len * u;
-        if (y > 268 || x < worldLeft || x > worldRight) break;
-        // thinning with distance, and only when there is something to light up
-        if (noise[(Math.floor(gy(y)) * cols + Math.floor(gx(x)) + t) % noise.length] > 0.35 + 0.5 * u) continue;
-        stampDisc(x, y, 1.4, (0.35 + 0.45 * s.energy) * (1 - u * 0.6), ACCENT);
+  // -- the boombox -----------------------------------------------------------
+
+  const BOX = { left: -46, right: 420, top: 250, bottom: 362 };
+  const SPEAKERS = [
+    { x: 48, y: 306 },
+    { x: 328, y: 306 },
+  ];
+
+  function stampBoombox(s, f, dt, tempo, beatFlash) {
+    const { left, right, top, bottom } = BOX;
+
+    // Carry handle, up over his head like the frame on a real ghetto blaster.
+    stampLine(left + 58, top, left + 58, 64, 2.4, 0.85, BOOTH);
+    stampLine(right - 58, top, right - 58, 64, 2.4, 0.85, BOOTH);
+    stampLine(left + 52, 64, right - 52, 64, 3.2, 0.95, BOOTH);
+    stampLine(176, 58, 224, 58, 4.5, 1, BOOTH);
+
+    // Body: outline plus a thin scatter, so it is solid enough to stand behind
+    // but never a wall of characters.
+    stampLine(left, top, right, top, 2.6, 1, BOOTH);
+    stampLine(left, bottom, right, bottom, 2.2, 0.8, BOOTH);
+    stampLine(left, top, left, bottom, 2.2, 0.9, BOOTH);
+    stampLine(right, top, right, bottom, 2.2, 0.9, BOOTH);
+    const j0 = Math.max(0, Math.floor(gy(top)));
+    const j1 = Math.min(rows - 1, Math.ceil(gy(bottom)));
+    for (let j = j0; j <= j1; j++) {
+      for (let i = 0; i < cols; i++) {
+        const x = vx(i);
+        if (x < left || x > right) continue;
+        const n = noise[j * cols + i];
+        if (n > 0.09) continue;
+        put(i, j, 0.22 + 0.2 * n + 0.12 * s.energy, BOOTH);
       }
     }
 
-    // Sparks on the beat, thrown around the hall.
-    if (f.beat) {
-      for (let i = 0; i < 7; i++) {
-        const n = noise[(i * 97 + Math.floor(ballAngle * 31)) % noise.length];
-        const n2 = noise[(i * 233 + Math.floor(ballAngle * 17)) % noise.length];
-        stampDisc(worldLeft + n * (worldRight - worldLeft), 20 + n2 * 220, 1.6, 1, ACCENT);
-      }
+    // Two big cones. They pulse on the bass and the inner ring spins at the
+    // tempo, so the speed of the track is visible in the gear as well.
+    platterAngle += dt * (0.4 + 4.5 * s.energy) * tempo;
+    const pump = 1 + 0.07 * s.bass * s.energy + 0.06 * s.kick;
+    for (const sp of SPEAKERS) {
+      stampEllipseRing(sp.x, sp.y, 46 * pump, 46 * pump, 2.4, 0.9, BOOTH);
+      stampEllipseRing(sp.x, sp.y, 34 * pump, 34 * pump, 2, 0.5 + 0.4 * s.bass, BOOTH);
+      stampEllipseRing(sp.x, sp.y, 20 * pump, 20 * pump, 2, 0.45 + 0.5 * s.kick, BOOTH);
+      stampDisc(sp.x, sp.y, 6 + 3 * s.kick, 1, BOOTH);
+      const a = platterAngle;
+      stampLine(
+        sp.x + Math.cos(a) * 8, sp.y + Math.sin(a) * 8,
+        sp.x + Math.cos(a) * 18 * pump, sp.y + Math.sin(a) * 18 * pump,
+        1.6, 0.9, BOOTH,
+      );
+    }
+
+    // Centre stack: tuner strip, cassette door, buttons, and a VU pair that
+    // moves with the bands rather than with the overall level.
+    stampLine(150, 262, 250, 262, 1.6, 0.5, BOOTH);
+    for (let i = 0; i < 9; i++) {
+      const x = 152 + i * 12;
+      stampLine(x, 258, x, 266, 1.2, i % 2 ? 0.4 : 0.7, BOOTH);
+    }
+    const needle = 152 + 96 * clamp(s.crossfade, 0, 1);
+    stampLine(needle, 256, needle, 268, 1.8, 1, BOOTH);
+
+    stampLine(160, 276, 240, 276, 1.6, 0.7, BOOTH);
+    stampLine(160, 306, 240, 306, 1.6, 0.7, BOOTH);
+    stampLine(160, 276, 160, 306, 1.6, 0.7, BOOTH);
+    stampLine(240, 276, 240, 306, 1.6, 0.7, BOOTH);
+    stampDisc(182, 291, 5 + 2 * s.kick, 0.8, BOOTH);
+    stampDisc(218, 291, 5 + 2 * s.kick, 0.8, BOOTH);
+
+    const vuL = clamp(s.bass * s.energy, 0, 1);
+    const vuR = clamp(s.high * s.energy + 0.05, 0, 1);
+    stampLine(160, 318, 160 + 34 * vuL, 318, 2.4, 1, BOOTH);
+    stampLine(206, 318, 206 + 34 * vuR, 318, 2.4, 1, BOOTH);
+    for (let i = 0; i < 6; i++) {
+      const x = 162 + i * 14;
+      stampLine(x, 330, x, 330 + 8 * (0.3 + 0.7 * s.fader), 1.4, 0.6, BOOTH);
     }
   }
 
@@ -467,10 +495,13 @@ export function createAsciiStage(container) {
    * @param {number} dt seconds since the last frame
    * @param {object} rig the rig handle, already posed for this frame
    */
+  let clock = 0;
+
   function update(f, s, dt, rig) {
     if (!cols || !rows) return;
     density.fill(0);
     kind.fill(0);
+    clock += dt;
 
     beatFlash = f.beat ? 1 : Math.max(0, beatFlash - dt * 5);
     // Tempo scale: everything that moves on its own moves at the pulse he is
@@ -479,9 +510,9 @@ export function createAsciiStage(container) {
     hueShift = (hueShift + dt * (4 + 26 * s.energy) + (s.flash > 0.9 ? 40 : 0)) % 360;
 
     const view = { ...s, hueShift };
-    stampRoom(view, f, dt, tempo, beatFlash);
+    stampSky(view, f, clock, beatFlash);
     stampRig(rig.svg);
-    stampBooth(view, dt, tempo);
+    stampBoombox(view, f, dt, tempo, beatFlash);
     paint(view, f, beatFlash);
   }
 
