@@ -18,8 +18,7 @@
 // The legs are visible, so they take a weight shift and a knee bend on the
 // landing. There is no step cycle anywhere in this file.
 
-const SILENCE = 0.014; // RMS below this counts as an empty room
-const LEVEL_SPAN = 0.1; // RMS above SILENCE that maps to full energy
+const SILENCE = 0.009; // RMS below this counts as an empty room
 
 /**
  * Base pose: leaning on the top of the boombox, both hands clear of it so they
@@ -215,9 +214,10 @@ export function createChoreo(rig) {
   let loudFast = 0;
   let loudSlow = 0;
   let loudLag = 0;
-  let energyLag = 0;
   let bassSm = 0;
   let bassMax = 0;
+  let bassSlow = 0;
+  let lastHitAt = -1;
   let highFast = 0;
   let highSlow = 0;
   let energy = 0;
@@ -231,6 +231,7 @@ export function createChoreo(rig) {
   let flash = 0;
 
   let midSm = 0;
+  let loudMax = 0.05;
   let music = 0;
   const onsetTimes = [];
 
@@ -307,27 +308,43 @@ export function createChoreo(rig) {
       // lands from a whole number of beats. Music lands on the grid; irregular
       // bursts from a room land uniformly between beats, which is what stops a
       // crowd from being mistaken for a track.
+      // Only the most recent onsets: live tempo drifts, and measuring drift
+      // across ten seconds reads as incoherence when it is just a human tempo.
+      const grid = onsetTimes.slice(-6);
       let error = 0;
-      for (const t of onsetTimes) {
-        const beatsFromStart = (t - onsetTimes[0]) / median;
+      for (const t of grid) {
+        const beatsFromStart = (t - grid[0]) / median;
         error += Math.abs(beatsFromStart - Math.round(beatsFromStart));
       }
-      const coherence = clamp(1 - error / onsetTimes.length / 0.18, 0, 1);
+      const coherence = clamp(1 - error / grid.length / 0.22, 0, 1);
       regularity = 0.45 * (onGrid / gaps.length) + 0.55 * coherence;
     }
     const recent = onsetTimes.filter((t) => now - t < 4).length;
-    const density = clamp((recent - 2) / 4, 0, 1);
+    const density = clamp((recent - 1) / 3, 0, 1);
+    // Microphones roll off exactly the band this used to lean on, so the low
+    // end is a modifier now, not a gate. The rhythm tests carry the decision.
     const share = bassSm / (bassSm + midSm + 1e-3);
-    const lowWeight = clamp((share - 0.22) / 0.28, 0, 1);
+    const lowWeight = clamp((share - 0.14) / 0.3, 0, 1);
     const stale = onsetTimes.length ? clamp(1 - (now - onsetTimes[onsetTimes.length - 1]) / 2.5, 0, 1) : 0;
-    const musicTarget = regularity * density * stale * (0.35 + 0.65 * lowWeight);
+    // Regularity is the decision, because it is the one thing a room full of
+    // people cannot fake: shouting produces plenty of onsets, so density and
+    // low end only modulate a score that regularity has already earned.
+    const musicTarget = stale * clamp(regularity * (0.45 + 0.55 * density) * (0.8 + 0.2 * lowWeight), 0, 1);
     // Slow either way: a single shout cannot fake a pulse into existence, and a
     // gap between tracks does not kill it instantly.
     music = smooth(music, musicTarget, musicTarget > music ? 1.1 : 2.4, step);
 
-    const level = clamp((loudFast - SILENCE) / LEVEL_SPAN, 0, 1);
+    // Auto gain. A phone speaker across a room lands near 0.02 RMS and a hot
+    // line feed near 0.2, so a fixed span means the mascot either barely moves
+    // or saturates. Normalise against a slowly decaying peak instead, and only
+    // above the silence floor, so any microphone at any gain reads as 0..1.
+    loudMax = Math.max(loudFast, loudMax * Math.exp(-step / 8), 0.03);
+    const live0 = loudFast > SILENCE;
+    const level = live0
+      ? clamp((loudFast - SILENCE) / Math.max(0.012, 0.72 * loudMax - SILENCE), 0, 1)
+      : 0;
     // Loudness only counts once it is loudness with a pulse behind it.
-    const drive = level * clamp((music - 0.15) / 0.45, 0, 1);
+    const drive = level * clamp((music - 0.25) / 0.3, 0, 1);
     // Energy rises quickly and falls slowly: that is what "sustained loudness"
     // means, as opposed to a single transient.
     energy = smooth(energy, drive, drive > energy ? 0.35 : 1.7, step);
@@ -343,11 +360,23 @@ export function createChoreo(rig) {
     // console's onset detector already runs on the 20-140 Hz flux, so a beat is
     // a low hit by construction, and this only sets how heavy it lands.
     bassMax = Math.max(bassSm, bassMax * Math.exp(-step / 1.5));
+    // The console's onset detector runs on 20-140 Hz flux, which a small
+    // speaker across a room barely produces. Treat a sharp rise in the low band
+    // as a hit too, so the dip still lands when the detector misses one.
+    bassSlow = smooth(bassSlow, f.bass, 0.5, step);
+    const bassSpike = f.bass > bassSlow * 1.35 + 0.06 && now - lastHitAt > 0.16;
+    const hit = f.beat || bassSpike;
+    if (hit) lastHitAt = now;
     // The dip has to clear before the next beat arrives, or fast music smears
     // into one long slouch. Tie the release to the tempo, not to a constant.
     const beatSeconds = 60 / clamp(f.bpm, 60, 190);
     kick *= Math.exp(-step / clamp(beatSeconds * 0.32, 0.07, 0.22));
-    if (live && f.beat && music > 0.45) kick = Math.max(kick, clamp(0.55 + 0.45 * bassMax, 0, 1));
+    // Confidence scales the hit rather than switching it on, so a half sure
+    // pulse produces a half sized dip instead of a cliff edge.
+    const trust = clamp((music - 0.3) / 0.25, 0, 1);
+    if (live && hit && trust > 0) {
+      kick = Math.max(kick, clamp(0.55 + 0.45 * bassMax, 0, 1) * trust);
+    }
 
     // Confidence that there is an actual pulse in the room right now. Without
     // it the beat-locked sway would free-run on the last tempo estimate through
@@ -355,7 +384,7 @@ export function createChoreo(rig) {
     beatConf = clamp(beatConf * Math.exp(-step / 3) + (f.beat ? 0.5 : 0), 0, 1);
 
     tick *= Math.exp(-step / 0.09);
-    if (live && music > 0.45 && highFast > highSlow * 1.3 + 0.04 && now - lastTickAt > 0.1) {
+    if (live && music > 0.35 && highFast > highSlow * 1.3 + 0.04 && now - lastTickAt > 0.1) {
       lastTickAt = now;
       tickSign = -tickSign;
       tick = clamp(highFast, 0, 1);
@@ -368,10 +397,10 @@ export function createChoreo(rig) {
     // and the energy envelope has to have climbed. Steady loud music satisfies
     // neither, because the lagging values catch up within a couple of seconds,
     // which is what keeps this a one-off reaction instead of a tic.
+    // Measured on the raw level, not on the normalised energy: the auto gain
+    // above deliberately cancels level changes, so a drop is invisible to it.
     loudLag = smooth(loudLag, loudFast, 1.2, step);
-    energyLag = smooth(energyLag, energy, 3, step);
-    const jumped =
-      loudFast > loudLag * 1.9 + 0.03 && energy > energyLag + 0.2 && energy > 0.45 && music > 0.5;
+    const jumped = loudFast > loudLag * 1.9 + 0.02 && loudFast > SILENCE * 1.8 && music > 0.4;
     if (jumped && now - lastDropAt > 12 && (!gesture || GESTURES[gesture.key].set !== 'drop')) {
       startGesture(pick('drop'), now);
       flash = 1;
@@ -387,11 +416,11 @@ export function createChoreo(rig) {
     // Groove moves: while a track is actually running, drop one in on a beat
     // every few bars. Starting on an onset is what makes them land musically
     // instead of arriving at some arbitrary moment.
-    if (music > 0.5 && energy > 0.35 && !gesture && now > nextGrooveAt && f.beat) {
+    if (music > 0.35 && energy > 0.3 && !gesture && now > nextGrooveAt && hit) {
       startGesture(pick('groove'), now);
       nextGrooveAt = now + beatSeconds * (8 + Math.floor(Math.random() * 3) * 4);
     }
-    if (!(music > 0.5)) nextGrooveAt = Math.max(nextGrooveAt, now + 4);
+    if (!(music > 0.35)) nextGrooveAt = Math.max(nextGrooveAt, now + 4);
 
     // --- reactive pose -----------------------------------------------------
     const amp = 0.3 + 0.7 * energy; // sustained loudness widens every range
@@ -410,14 +439,14 @@ export function createChoreo(rig) {
     crossfade = smooth(crossfade, clamp(0.5 + (highFast - bassSm) * 0.8, 0, 1), 0.6, step);
 
     const target = {
-      torso: 5 * sway + 8 * dip + 1.2 * breath,
+      torso: 6.5 * sway + 10 * dip + 1.2 * breath,
       head: 9 * tickSign * detail + 2.4 * breath - 3 * dip + 3 * halfBar * energy,
       // Left hand rides the mixer: it follows the fader it is holding, and
       // nudges it on the groove rather than on the level.
-      armL_upper: STANCE.armL_upper + 13 * fader - 5 * dip + 6 * groove * energy,
+      armL_upper: STANCE.armL_upper + 13 * fader - 6 * dip + 8 * groove * energy,
       armL_lower: STANCE.armL_lower + 9 * fader + 4 * detail,
       // Right hand on the platter: shoulder drops into the hit, fingers tick.
-      armR_upper: STANCE.armR_upper + 12 * dip + 2 * detail - 5 * groove * energy,
+      armR_upper: STANCE.armR_upper + 14 * dip + 2 * detail - 7 * groove * energy,
       armR_lower: STANCE.armR_lower - 5 * dip + 10 * tickSign * detail,
       // Legs are visible now, so they take the weight shift, a knee bend on the
       // landing and nothing else. There is no step cycle in here.
@@ -427,8 +456,8 @@ export function createChoreo(rig) {
       legR_lower: 5 * dip + 2 * Math.max(0, -sway),
     };
 
-    let lift = 11 * dip - 1.5 * breath;
-    let squash = 0.26 * dip + 0.07 * bassSm * energy;
+    let lift = 14 * dip - 1.5 * breath;
+    let squash = 0.3 * dip + 0.07 * bassSm * energy;
 
     // --- gesture overlay ---------------------------------------------------
     let weight = 0;
