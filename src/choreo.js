@@ -18,7 +18,7 @@
 // The legs are visible, so they take a weight shift and a knee bend on the
 // landing. There is no step cycle anywhere in this file.
 
-const SILENCE = 0.009; // RMS below this counts as an empty room
+const SILENCE = 0.003; // RMS below this counts as an empty room
 
 /**
  * Base pose: right hand down on the console working the music, left hand up in
@@ -359,10 +359,10 @@ export function createChoreo(rig) {
     // line feed near 0.2, so a fixed span means the mascot either barely moves
     // or saturates. Normalise against a slowly decaying peak instead, and only
     // above the silence floor, so any microphone at any gain reads as 0..1.
-    loudMax = Math.max(loudFast, loudMax * Math.exp(-step / 8), 0.03);
+    loudMax = Math.max(loudFast, loudMax * Math.exp(-step / 8), 0.012);
     const live0 = loudFast > SILENCE;
     const level = live0
-      ? clamp((loudFast - SILENCE) / Math.max(0.012, 0.72 * loudMax - SILENCE), 0, 1)
+      ? clamp((loudFast - SILENCE) / Math.max(0.005, 0.72 * loudMax - SILENCE), 0, 1)
       : 0;
     // Loudness only counts once it is loudness with a pulse behind it.
     const drive = level * clamp((Math.max(music, 0.8 * pumping) - 0.22) / 0.3, 0, 1);

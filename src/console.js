@@ -67,6 +67,7 @@ function h(tag, attrs = {}, children = []) {
  * @param {number} [opts.volume=0.8] initial output volume, 0..1
  * @param {boolean} [opts.ui=true] build the transport UI
  * @param {boolean} [opts.dropTarget=true] accept audio files dropped on container
+ * @param {number} [opts.micGain=12] makeup gain applied to microphone input
  * @param {object} [opts.detector] overrides for DETECTOR_DEFAULTS
  * @returns {object} console handle
  */
@@ -94,6 +95,15 @@ export function createConsole(container, opts = {}) {
   const bus = ctx.createGain(); // everything that should be analysed
   bus.connect(analyser);
   bus.connect(detectAnalyser);
+
+  // Microphones deliver a signal an order of magnitude quieter than file
+  // playback: a room mic sits near 0.005 RMS where a decoded track sits near
+  // 0.15. Everything downstream, the onset detector included, then behaves
+  // completely differently depending on the source. Makeup gain on the mic
+  // input alone puts both in the same range.
+  const micGain = ctx.createGain();
+  micGain.gain.value = opts.micGain === undefined ? 12 : opts.micGain;
+  micGain.connect(bus);
 
   const output = ctx.createGain(); // only what should be audible
   output.gain.value = clamp(opts.volume === undefined ? 0.8 : opts.volume, 0, 1);
@@ -302,8 +312,9 @@ export function createConsole(container, opts = {}) {
       },
     });
     micSource = ctx.createMediaStreamSource(micStream);
-    // Analyser only: routing the mic to the destination would feed back.
-    micSource.connect(bus);
+    // Analyser only, through the makeup gain: routing the mic to the
+    // destination would feed back.
+    micSource.connect(micGain);
     micStartedAt = ctx.currentTime;
   }
 
@@ -589,6 +600,12 @@ export function createConsole(container, opts = {}) {
       if (source !== 'mic' && Number.isFinite(seconds)) {
         audio.currentTime = clamp(seconds, 0, Number.isFinite(audio.duration) ? audio.duration : seconds);
       }
+      return handle;
+    },
+
+    /** Makeup gain on the microphone input. Analysis only, never audible. */
+    setMicGain(value) {
+      if (Number.isFinite(value)) micGain.gain.value = clamp(value, 0, 64);
       return handle;
     },
 
