@@ -181,45 +181,50 @@ h2 {
   height: 100%;
 }
 
+/* Everything here is sized against the width of the stage, because this is
+   read from across a room and the stage might be a laptop or a projector. */
 .ticker {
   position: absolute;
   top: 0;
   right: 0;
   z-index: 2;
-  padding: 12px 14px;
-  max-width: min(44%, 320px);
+  padding: clamp(12px, 1.6vw, 28px) clamp(14px, 1.8vw, 32px);
+  max-width: min(56%, 720px);
   text-align: right;
   pointer-events: none;
-  text-shadow: 0 0 8px #000, 0 0 2px #000;
+  text-shadow: 0 0 10px #000, 0 0 3px #000;
 }
 
 .ticker__label {
   margin: 0;
-  font-size: 10px;
+  font-size: clamp(10px, 0.95vw, 17px);
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--dim);
 }
 
 .ticker__now {
-  margin: 2px 0 10px;
-  font-size: 15px;
+  margin: clamp(3px, 0.4vw, 8px) 0 clamp(12px, 1.4vw, 26px);
+  font-size: clamp(19px, 2.6vw, 52px);
+  line-height: 1.15;
   color: var(--accent-soft);
   overflow-wrap: anywhere;
 }
 
 .ticker__now small {
   display: block;
-  font-size: 10px;
-  letter-spacing: 0.1em;
+  margin-top: 0.25em;
+  font-size: clamp(11px, 1.05vw, 20px);
+  letter-spacing: 0.08em;
   color: var(--dim);
 }
 
 .ticker__next {
   list-style: none;
-  margin: 2px 0 0;
+  margin: clamp(3px, 0.4vw, 8px) 0 0;
   padding: 0;
-  font-size: 11px;
+  font-size: clamp(13px, 1.35vw, 27px);
+  line-height: 1.45;
   color: var(--text);
 }
 
@@ -240,7 +245,9 @@ h2 {
    reading the queue, not while looking at the other corner of the screen. */
 .ticker__advance {
   position: static;
-  margin-top: 12px;
+  margin-top: clamp(12px, 1.3vw, 24px);
+  font-size: clamp(10px, 0.9vw, 15px);
+  padding: clamp(5px, 0.6vw, 10px) clamp(10px, 1vw, 18px);
   pointer-events: auto;
 }
 
