@@ -252,6 +252,65 @@ h2 {
   font-size: 11px;
 }
 
+/* -- the guest view -------------------------------------------------------- */
+/* Someone who scanned a code on their phone wants one thing: the form. The
+   stage, the microphone, the booth address and the queue controls all belong to
+   whoever is running the night. */
+
+.guest-now {
+  display: none;
+}
+
+body[data-route='request'] .stage-wrap,
+body[data-route='request'] .routes,
+body[data-route='request'] .card--mic,
+body[data-route='request'] .feed,
+body[data-route='request'] .booth,
+body[data-route='request'] .queue__actions,
+body[data-route='request'] #queue-clear,
+body[data-route='request'] .state-line,
+body[data-route='request'] .card--mic + .card,
+body[data-route='request'] footer {
+  display: none;
+}
+
+body[data-route='request'] .panel {
+  grid-template-columns: 1fr;
+}
+
+body[data-route='request'] .guest-now {
+  display: block;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  background: var(--panel);
+  font-size: 13px;
+  color: var(--text);
+}
+
+body[data-route='request'] .guest-now b {
+  display: block;
+  color: var(--accent);
+  font-weight: 400;
+  font-size: 15px;
+  margin-top: 2px;
+}
+
+body[data-route='request'] h1 {
+  font-size: 18px;
+}
+
+body[data-route='request'] input {
+  font-size: 16px; /* anything smaller and iOS zooms the page on focus */
+  padding: 12px;
+}
+
+body[data-route='request'] .button {
+  padding: 12px 18px;
+  font-size: 14px;
+}
+
 /* -- panels ---------------------------------------------------------------- */
 
 .panel {

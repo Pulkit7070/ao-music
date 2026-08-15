@@ -126,8 +126,9 @@
       </section>
 
       <section id="route-party" class="panel" hidden>
+        <p class="guest-now" id="guest-now"></p>
         <div class="card">
-          <h2>Request a track</h2>
+          <h2 id="request-heading">Request a track</h2>
           <form id="request-form" autocomplete="off">
             <label for="request-name">Your name</label>
             <input id="request-name" name="name" maxlength="40" placeholder="Priya" required />
@@ -151,7 +152,7 @@
             <button type="submit" class="button">Add to the queue</button>
           </form>
           <p class="status" id="request-feedback" data-tone="idle">
-            Type at this screen. No phones, no server, no accounts.
+            <span id="request-hint">Type at this screen, or let guests scan the code.</span>
           </p>
           <p class="state-line">He is: <b id="party-state">still, waiting for sound</b></p>
           <div class="meter" role="img" aria-label="Live input level">
