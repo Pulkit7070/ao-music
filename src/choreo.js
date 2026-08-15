@@ -28,10 +28,11 @@ const SILENCE = 0.003; // RMS below this counts as an empty room
 const STANCE = {
   torso: 0,
   head: 0,
-  // Held out to the side, not overhead. Past about 70 degrees this arm swings
-  // inward and the hand ends up sitting on top of his own head.
-  armL_upper: 46,
-  armL_lower: 10,
+  // Both hands on the machine. The raised hand is a moment he goes to, not a
+  // pose he holds: standing there with an arm in the air all night is the one
+  // thing no real DJ does.
+  armL_upper: -44,
+  armL_lower: 32,
   // Out over the deck rather than tucked down the side: at a steeper shoulder
   // angle the whole arm hugs the torso and the hand disappears into it.
   armR_upper: 18,
@@ -43,129 +44,144 @@ const STANCE = {
 };
 
 /**
- * One-shot gestures. `pose` is merged over the reactive pose with the gesture
- * weight, so a gesture only overrides the joints it names. `pose` may be a
- * function of u (0..1 through the gesture) for moves that have to travel, like
- * a wave or a pump.
+ * What a DJ actually does, from watching how the job is described: the hands
+ * live on the gear, the constant is nodding to the beat, and a hand in the air
+ * is punctuation at a peak rather than a pose you hold all night.
  *
- * Three sets: `drop` fires on a real jump in level, `groove` is picked on the
- * beat every few bars while a track is running, `idle` only happens in a quiet
- * room. Ten moves in total, drawn without immediate repeats, so a floor
- * watching for a few minutes does not see the same thing twice in a row.
+ *   work   nudging the jog wheel, riding the crossfader, a knob, the pitch
+ *          fader, and cueing the next track with one cup to the ear. Frequent,
+ *          small, both hands stay on the machine.
+ *   hype   raised hand, point at the floor, wave, fist pump, palm out into a
+ *          build. Occasional, on phrase boundaries and drops.
+ *   idle   a quiet room: adjust the cup, check the deck, look around.
+ *
+ * `pose` may be a function of u, 0..1 through the gesture, for moves that
+ * travel. Angles stay inside the range where the arms read as arms: the left
+ * arm swings inward above about 70 degrees and lands on his own head, and the
+ * right arm does the same past about -75.
  */
 const GESTURES = {
-  // -- drop reactions --------------------------------------------------------
-  handsUp: {
-    set: 'drop',
+  // -- working the gear ------------------------------------------------------
+  jogNudge: {
+    set: 'work',
+    dur: 1.1,
+    rise: 0.15,
+    fall: 0.3,
+    // short pushes on the platter, the way you nudge a track back into time
+    pose: (u) => ({
+      armR_upper: 24 + 10 * Math.sin(u * Math.PI * 4),
+      armR_lower: 20 - 6 * Math.sin(u * Math.PI * 4),
+      head: 7,
+      torso: 3,
+    }),
+  },
+  crossfade: {
+    set: 'work',
+    dur: 1.4,
+    rise: 0.2,
+    fall: 0.3,
+    // the left hand travels across the fader and stays there
+    pose: (u) => ({ armL_upper: -52 + 26 * u, armL_lower: 34 - 10 * u, head: 5, torso: 2 }),
+  },
+  eqTweak: {
+    set: 'work',
+    dur: 1.3,
+    rise: 0.25,
+    fall: 0.3,
+    pose: { armL_upper: -12, armL_lower: 52, head: 9, torso: 4 },
+  },
+  pitchRide: {
+    set: 'work',
+    dur: 1.2,
+    rise: 0.25,
+    fall: 0.3,
+    pose: (u) => ({ armR_upper: 30 + 5 * Math.sin(u * Math.PI * 2), armR_lower: 26, head: 6 }),
+  },
+  cueNext: {
+    set: 'work',
+    dur: 2.6,
+    rise: 0.18,
+    fall: 0.2,
+    // one cup pressed to the ear while the next track is beatmatched: the most
+    // recognisable thing a DJ does
+    pose: { armL_upper: 26, armL_lower: 104, head: -5, torso: -2, armR_upper: 26 },
+    phones: 6,
+  },
+  lookUp: {
+    set: 'work',
+    dur: 1.6,
+    rise: 0.3,
+    fall: 0.35,
+    // head out of the gear and up at the floor
+    pose: { head: -12, torso: -7 },
+    lift: -3,
+  },
+
+  // -- hype, on peaks --------------------------------------------------------
+  handUp: {
+    set: 'hype',
     dur: 1.7,
     rise: 0.1,
     fall: 0.4,
-    pose: { armL_upper: 66, armL_lower: 18, armR_upper: -62, armR_lower: -22, head: -7, torso: 0 },
-    lift: -12,
-    stretch: -0.14,
-  },
-  pointUp: {
-    set: 'drop',
-    dur: 1.5,
-    rise: 0.1,
-    fall: 0.45,
-    pose: { armR_upper: -72, armR_lower: -18, armL_upper: 40, head: -9, torso: -4 },
-    lift: -8,
+    pose: (u) => ({
+      armL_upper: 66 - 8 * Math.abs(Math.sin(u * Math.PI * 2)),
+      armL_lower: 16,
+      head: -7,
+    }),
+    lift: -9,
     stretch: -0.1,
   },
+  bothHandsUp: {
+    set: 'hype',
+    dur: 1.9,
+    rise: 0.1,
+    fall: 0.4,
+    pose: { armL_upper: 66, armL_lower: 18, armR_upper: -62, armR_lower: -22, head: -8 },
+    lift: -13,
+    stretch: -0.14,
+  },
   fistPump: {
-    set: 'drop',
-    dur: 1.8,
+    set: 'hype',
+    dur: 1.6,
     rise: 0.12,
-    fall: 0.35,
-    // three pumps of the right arm, timed to the gesture rather than to a clock
+    fall: 0.3,
     pose: (u) => ({
-      armR_upper: -52 - 26 * Math.abs(Math.sin(u * Math.PI * 3)),
-      armR_lower: -20,
-      armL_upper: -30,
+      armR_upper: -50 - 24 * Math.abs(Math.sin(u * Math.PI * 3)),
+      armR_lower: -18,
       head: -5,
     }),
     lift: -5,
   },
-
-  // -- groove moves, on the beat while a track runs --------------------------
-  wave: {
-    set: 'groove',
-    dur: 2,
-    rise: 0.15,
-    fall: 0.3,
-    pose: (u) => ({
-      armR_upper: -66,
-      armR_lower: -22 + 26 * Math.sin(u * Math.PI * 4),
-      head: -4,
-    }),
-  },
-  crowdPoint: {
-    set: 'groove',
+  pointCrowd: {
+    set: 'hype',
     dur: 1.4,
     rise: 0.18,
     fall: 0.35,
-    pose: { armR_upper: -52, armR_lower: 12, torso: 9, head: 11 },
+    pose: { armR_upper: -46, armR_lower: 14, torso: 9, head: 11 },
   },
-  workDeck: {
-    set: 'groove',
-    dur: 1.6,
-    rise: 0.2,
+  wave: {
+    set: 'hype',
+    dur: 1.8,
+    rise: 0.15,
     fall: 0.3,
     pose: (u) => ({
-      armR_upper: 52 + 8 * Math.sin(u * Math.PI * 6),
-      armR_lower: 24,
-      torso: 6,
-      head: 9,
+      armR_upper: -60,
+      armR_lower: -20 + 24 * Math.sin(u * Math.PI * 4),
+      head: -4,
     }),
   },
-  leanBack: {
-    set: 'groove',
-    dur: 1.9,
-    rise: 0.3,
-    fall: 0.35,
-    pose: { torso: -13, head: -11, armL_upper: 30, armR_upper: 36 },
+  palmOut: {
+    set: 'hype',
+    dur: 1.5,
+    rise: 0.35,
+    fall: 0.2,
+    // hand held flat out over the floor through a build, holding the moment
+    pose: { armR_upper: -24, armR_lower: 26, torso: -6, head: -9 },
     lift: -4,
   },
-  bounce: {
-    set: 'groove',
-    dur: 1.5,
-    rise: 0.12,
-    fall: 0.25,
-    // two dips through the body rather than through the arms
-    pose: (u) => ({ torso: 7 * Math.sin(u * Math.PI * 4), head: -3 }),
-    liftOf: (u) => 9 * Math.abs(Math.sin(u * Math.PI * 2)),
-    squashOf: (u) => 0.16 * Math.abs(Math.sin(u * Math.PI * 2)),
-  },
-  rollHands: {
-    set: 'groove',
-    dur: 2.1,
-    rise: 0.2,
-    fall: 0.3,
-    pose: (u) => ({
-      armL_upper: 34 + 26 * Math.sin(u * Math.PI * 4),
-      armL_lower: 24,
-      armR_upper: -14 - 30 * Math.cos(u * Math.PI * 4),
-      armR_lower: -26,
-      head: 4 * Math.sin(u * Math.PI * 4),
-    }),
-  },
-  swagger: {
-    set: 'groove',
-    dur: 2.2,
-    rise: 0.25,
-    fall: 0.3,
-    // a slow weight shift side to side, shoulders following
-    pose: (u) => ({
-      torso: 11 * Math.sin(u * Math.PI * 2),
-      head: -6 * Math.sin(u * Math.PI * 2),
-      armL_upper: 44 + 18 * Math.sin(u * Math.PI * 2),
-      armR_upper: 16 + 16 * Math.sin(u * Math.PI * 2),
-    }),
-  },
 
-  // -- idle, only in a quiet room --------------------------------------------
-  adjust: {
+  // -- quiet room ------------------------------------------------------------
+  adjustPhones: {
     set: 'idle',
     dur: 1.9,
     rise: 0.3,
@@ -178,7 +194,7 @@ const GESTURES = {
     dur: 1.5,
     rise: 0.3,
     fall: 0.35,
-    pose: { head: 13, torso: 5, armR_upper: 58, armR_lower: 26 },
+    pose: { head: 13, torso: 5, armR_upper: 34, armR_lower: 26 },
   },
   lookAround: {
     set: 'idle',
@@ -189,7 +205,9 @@ const GESTURES = {
   },
 };
 
-const BY_SET = { drop: [], groove: [], idle: [] };
+const DROP_MOVES = ['bothHandsUp', 'handUp', 'fistPump'];
+
+const BY_SET = { work: [], hype: [], idle: [] };
 for (const key in GESTURES) BY_SET[GESTURES[key].set].push(key);
 
 
@@ -247,7 +265,12 @@ export function createChoreo(rig) {
   let lastTickAt = -1;
   let lastDropAt = -20; // so the first real drop after page load can still fire
   let nextIdleAt = 6;
-  let nextGrooveAt = 8;
+  let nextMoveAt = 6;
+  let lastBuildAt = -20;
+  let beatCount = 0;
+  let dropIndex = 0;
+  let energyRise = 0;
+  let energyWas = 0;
 
   let gesture = null; // { key, t }
   const recent = []; // last few gesture keys, so nothing repeats back to back
@@ -398,7 +421,7 @@ export function createChoreo(rig) {
     kick *= Math.exp(-step / clamp(beatSeconds * 0.32, 0.07, 0.22));
     // Confidence scales the hit rather than switching it on, so a half sure
     // pulse produces a half sized dip instead of a cliff edge.
-    const trust = clamp((music - 0.3) / 0.25, 0, 1);
+    const trust = clamp((music - 0.42) / 0.22, 0, 1);
     if (live && hit && trust > 0) {
       kick = Math.max(kick, clamp(0.55 + 0.45 * bassMax, 0, 1) * trust);
     }
@@ -426,9 +449,23 @@ export function createChoreo(rig) {
     // above deliberately cancels level changes, so a drop is invisible to it.
     loudLag = smooth(loudLag, loudFast, 1.2, step);
     const jumped = loudFast > loudLag * 1.9 + 0.02 && loudFast > SILENCE * 1.8 && music > 0.55;
-    if (jumped && now - lastDropAt > 12 && (!gesture || GESTURES[gesture.key].set !== 'drop')) {
-      startGesture(pick('drop'), now);
+    if (jumped && now - lastDropAt > 12 && (!gesture || GESTURES[gesture.key].set !== 'hype')) {
+      const move = DROP_MOVES[dropIndex % DROP_MOVES.length];
+      dropIndex += 1;
+      startGesture(move, now);
       flash = 1;
+    }
+
+    // A build is energy climbing steadily without a jump. Hold a palm out over
+    // the floor through it, the way a DJ marks the moment before a drop.
+    energyRise = smooth(energyRise, energy - energyWas, 0.5, step);
+    energyWas = energy;
+    if (
+      !gesture && music > 0.5 && energyRise > 0.0025 && energy > 0.45 &&
+      now - lastDropAt > 6 && now - lastBuildAt > 14
+    ) {
+      lastBuildAt = now;
+      startGesture('palmOut', now);
     }
 
     // Idle gestures only exist when the room is quiet, and never as a cycle.
@@ -438,14 +475,17 @@ export function createChoreo(rig) {
     }
     if (live) nextIdleAt = Math.max(nextIdleAt, now + 5);
 
-    // Groove moves: while a track is actually running, drop one in on a beat
-    // every few bars. Starting on an onset is what makes them land musically
-    // instead of arriving at some arbitrary moment.
-    if (music > 0.45 && energy > 0.3 && !gesture && now > nextGrooveAt && hit) {
-      startGesture(pick('groove'), now);
-      nextGrooveAt = now + beatSeconds * (8 + Math.floor(Math.random() * 3) * 4);
+    // Everything else lands on a beat, and the phrase decides what kind of
+    // move it is: hype at the top of a sixteen beat phrase when the room is
+    // going, working the gear the rest of the time.
+    if (hit) beatCount += 1;
+    if (music > 0.45 && !gesture && hit && now > nextMoveAt) {
+      const onPhrase = beatCount % 16 === 0;
+      const hyped = onPhrase && energy > 0.5 && Math.random() < 0.75;
+      startGesture(pick(hyped ? 'hype' : 'work'), now);
+      nextMoveAt = now + beatSeconds * (hyped ? 12 : 4 + Math.floor(Math.random() * 3) * 2);
     }
-    if (!(music > 0.45)) nextGrooveAt = Math.max(nextGrooveAt, now + 4);
+    if (!(music > 0.45)) nextMoveAt = Math.max(nextMoveAt, now + 3);
 
     // --- reactive pose -----------------------------------------------------
     const amp = 0.3 + 0.7 * energy; // sustained loudness widens every range
@@ -475,8 +515,8 @@ export function createChoreo(rig) {
       head: 11 * tickSign * detail + 2.4 * breath - 5 * dip + 5 * halfBar * energy,
       // Raised hand: up and down through the beat, punching a little harder on
       // the hit itself.
-      armL_upper: clamp(STANCE.armL_upper + 24 * pump * pumpAmount + 12 * dip, -70, 68),
-      armL_lower: STANCE.armL_lower + 22 * Math.max(0, -pump) * pumpAmount + 5 * detail,
+      armL_upper: clamp(STANCE.armL_upper + 10 * pump * pumpAmount + 10 * dip, -70, 68),
+      armL_lower: STANCE.armL_lower + 10 * Math.max(0, -pump) * pumpAmount + 5 * detail,
       // Working hand: stays down on the console, shoulder drops into the hit,
       // fingers tick with the hats.
       // The working hand pushes down into every hit and jogs the deck between
@@ -491,7 +531,13 @@ export function createChoreo(rig) {
       legR_lower: 7 * dip + 2 * Math.max(0, -sway),
     };
 
-    let lift = 18 * dip - 1.5 * breath;
+    // The one thing that never stops while a track is playing: nodding along.
+    // Tempo locked, gated by the music score, gone the moment the room is quiet.
+    const nod =
+      Math.max(0, Math.sin(2 * Math.PI * f.beatPhase)) *
+      clamp((alive - 0.42) / 0.22, 0, 1) *
+      (0.35 + 0.65 * energy);
+    let lift = 18 * dip + 4.5 * nod - 1.5 * breath;
     let squash = 0.34 * dip + 0.08 * bassSm * energy;
 
     // --- gesture overlay ---------------------------------------------------

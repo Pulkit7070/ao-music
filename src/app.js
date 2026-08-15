@@ -117,17 +117,19 @@ let lastText = 0;
 // camelCase gesture keys read as plain words in the state line, which also
 // makes it obvious from the page that he has more than one move.
 const GESTURE_WORDS = {
-  handsUp: 'both hands up on the drop',
-  pointUp: 'pointing at the ceiling',
+  jogNudge: 'nudging the jog wheel',
+  crossfade: 'riding the crossfader',
+  eqTweak: 'working the EQ',
+  pitchRide: 'trimming the pitch',
+  cueNext: 'cueing the next track',
+  lookUp: 'looking up at the floor',
+  handUp: 'hand in the air',
+  bothHandsUp: 'both hands up on the drop',
   fistPump: 'pumping the drop',
+  pointCrowd: 'pointing out at the crowd',
   wave: 'waving at the floor',
-  crowdPoint: 'pointing out at the crowd',
-  workDeck: 'working the deck',
-  leanBack: 'leaning back',
-  bounce: 'bouncing on the beat',
-  rollHands: 'rolling his hands',
-  swagger: 'shifting his weight',
-  adjust: 'adjusting the headphones',
+  palmOut: 'palm out through the build',
+  adjustPhones: 'adjusting the headphones',
   checkDeck: 'checking the deck',
   lookAround: 'looking around the room',
 };
