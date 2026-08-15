@@ -81,6 +81,24 @@
   fill: var(--ao-baton-shade);
 }
 
+/* DJ headphones. Skinned through --ao-phones* on .ao-rig like everything else. */
+.ao-rig__phones-band {
+  fill: none;
+  stroke: var(--ao-phones, #20283f);
+  stroke-width: 11;
+  stroke-linecap: round;
+}
+
+.ao-rig__phones-shell {
+  fill: var(--ao-phones, #20283f);
+  stroke: var(--ao-outline);
+  stroke-width: 2;
+}
+
+.ao-rig__phones-pad {
+  fill: var(--ao-phones-pad, #4d5f8c);
+}
+
 .ao-rig__ground {
   fill: var(--ao-ground);
 }

@@ -11,45 +11,41 @@ step, no dependencies:
 Matching stylesheets: `src/rig.css`, `src/console.css`. Both are plain CSS with
 custom properties you can override per version.
 
-## Layout rule
+## Layout
 
-Every version is one file:
+One page, two hash routes:
 
 ```
-versions/vN-slug.html
+index.html          markup and the two route panels
+src/app.js          routing, wiring, the single console and the single loop
+src/ascii.js        the ASCII stage: rasterises the rig into a character grid
+src/choreo.js       audio-reactive DJ motion, no dance cycle
+src/queue.js        party request queue, persisted in localStorage
+src/app.css         page and stage styling
 ```
 
-Standalone: its own markup, CSS and choreography live in that one file. The only
-things it may import from outside itself are the shared modules and their
-stylesheets:
+`#dj` is the DJ booth route, `#party` is the request and queue route. Both share
+one rig, one `AudioContext` and one `requestAnimationFrame` loop: switching
+routes toggles panel visibility and nothing else, so the audio never stops and
+the microphone is never re-requested.
 
-```html
-<link rel="stylesheet" href="../src/rig.css" />
-<link rel="stylesheet" href="../src/console.css" />
-<script type="module">
-  import { createRig } from '../src/rig.js';
-  import { createConsole } from '../src/console.js';
-</script>
-```
+The mascot on screen is drawn as ASCII on black. The rig is still the real
+jointed SVG: `src/ascii.js` mounts it invisibly, lets the choreography pose it,
+then reads each block back with `getCTM()` and stamps it into a character grid.
+`getCTM()` returns the svg viewport's CSS pixels, so it is composed with the
+inverse of the root matrix to get back to viewBox units. Bright glyphs trace the
+outlines, the interior is dithered by stable per-cell noise, and colour comes
+from the audio: hue from the spectral balance, brightness from energy. Anything
+that moves by itself (the platter, the ball, the light sweeps) is scaled by the
+detected tempo, so it speeds up and slows down with the music and nearly stops
+in silence.
 
-Do not edit `src/`, `assets/`, `index.html`, or another version's file. If you
-need something the rig or console does not expose, say so instead of forking the
-modules. Serve the repo root over any static server (`python3 -m http.server`)
-and open `http://127.0.0.1:8000/versions/vN-slug.html`. `file://` will not work,
-because ES modules need HTTP.
+Serve the repo root over any static server (`python3 -m http.server 8123`) and
+open `http://127.0.0.1:8123/#dj`. `file://` will not work, because ES modules
+need HTTP.
 
-Claimed files, one per worker:
-
-| File | Owner |
-| --- | --- |
-| `versions/v1-neon-grid.html` | version worker 1 |
-| `versions/v2-paper-cutout.html` | version worker 2 |
-| `versions/v3-crt-arcade.html` | version worker 3 |
-| `versions/v4-orchestra-pit.html` | version worker 4 |
-| `versions/v5-particle-storm.html` | version worker 5 |
-
-Rename the slug part if your visual direction ends up somewhere else, keep the
-`vN-` prefix, and update your own row in the table on `index.html`.
+The five `versions/vN-*.html` pages that an earlier draft of this document
+claimed are scrapped: they were never built.
 
 ## createRig
 
@@ -59,6 +55,8 @@ createRig(container: Element, opts?: {
   scale?:     number,   // initial uniform scale, default 1
   clamp?:     boolean,  // clamp angles to JOINT_LIMITS, default true
   baton?:     boolean,  // draw the conductor baton, default true
+  headphones?: boolean, // draw DJ headphones, one cup off the ear, default false
+  paws?:      'right' | 'both', // which forearms get a hand, default 'right'
   shadow?:    boolean,  // draw the ground shadow ellipse, default true
   replace?:   boolean,  // empty the container first, default true
   className?: string,   // extra class on the <svg>
@@ -70,7 +68,7 @@ createRig(container: Element, opts?: {
 RigHandle = {
   svg: SVGSVGElement,            // the mounted <svg>
   element: SVGSVGElement,        // alias of svg
-  parts: Record<JointName, SVGGElement>,
+  parts: Record<JointName, SVGGElement> & { headphones?: SVGGElement },
   joints: JointName[],           // === JOINTS
   pivots: typeof JOINT_PIVOTS,
   limits: typeof JOINT_LIMITS,
@@ -227,33 +225,15 @@ Features = {
 
 Unsubscribe with either the returned function or `unsubscribe(cb)`.
 
-## Version page skeleton
+## Choreography note
 
-Copy-pasteable, 20 lines, drops the mascot on screen dancing to the bundled
-loop. Replace the choreography with yours.
-
-```html
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8" /><title>vN slug</title>
-<link rel="stylesheet" href="../src/rig.css" /><link rel="stylesheet" href="../src/console.css" />
-<style>body{margin:0;background:#0d1117;color:#c9d4e4;font:13px ui-monospace,monospace}
-.wrap{max-width:640px;margin:32px auto;display:grid;gap:16px}</style></head>
-<body><div class="wrap"><div id="stage"></div><div id="deck"></div></div>
-<script type="module">
-import { createRig } from '../src/rig.js';
-import { createConsole } from '../src/console.js';
-const rig = createRig(document.getElementById('stage'));
-const deck = createConsole(document.getElementById('deck'));
-let beats = 0, hit = 0;
-deck.subscribe((f) => {
-  if (f.beat) { beats++; hit = 1; } else { hit = Math.max(0, hit - 0.06); }
-  const flow = beats + f.beatPhase, swing = Math.sin(Math.PI * flow);
-  rig.setPose({ legL_upper: 24 * swing, legR_upper: -24 * swing, torso: 5 * swing,
-    armR_upper: -30 + 22 * Math.sin(2 * Math.PI * f.beatPhase) });
-  rig.translate(0, -12 * Math.sin(Math.PI * f.beatPhase)).squash(0.16 * hit + 0.08 * f.bass);
-});
-</script></body></html>
-```
+`src/choreo.js` is the motion for this demo, and it deliberately has no dance
+cycle. Nothing advances on a timer: envelopes decay to zero in silence, the dip
+is an impulse fired by `beat`, the head tick is fired by a rise in the high
+band, `energy` scales the range of everything, and the hand-up is a one-off
+gesture triggered by a jump in level. If you drive the rig from a phase
+oscillator instead, the mascot will march on forever through an empty room,
+which is the thing this demo exists to avoid.
 
 ## Bundled loop
 

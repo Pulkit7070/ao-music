@@ -235,6 +235,11 @@ function buildMascot(opts) {
       joint: { ...JOINT_PIVOTS.armL_lower, r: (ARM.bottom - ARM.top) / 2 },
     }),
   );
+  if (opts.paws === 'both') {
+    armL_lower.appendChild(
+      el('circle', { class: 'ao-rig__paw', cx: 14, cy: (ARM.top + ARM.bottom) / 2, r: 15 }),
+    );
+  }
   armL_upper.appendChild(
     block(42, ARM.top, 42, ARM.bottom - ARM.top, {
       joint: { ...JOINT_PIVOTS.armL_upper, r: (ARM.bottom - ARM.top) / 2 },
@@ -255,6 +260,45 @@ function buildMascot(opts) {
   );
   head.appendChild(el('rect', { class: 'ao-rig__eye', x: 117, y: 110, width: 17, height: 24, rx: 2 }));
   head.appendChild(el('rect', { class: 'ao-rig__eye', x: 202, y: 110, width: 17, height: 24, rx: 2 }));
+
+  // DJ headphones. Drawn inside the head group so they ride every head tilt.
+  // One cup is flush on the ear, the other is swung off it, the way a DJ wears
+  // them to keep one ear on the room.
+  let phones = null;
+  if (opts.headphones) {
+    phones = el('g', { class: 'ao-rig__phones', 'data-part': 'headphones' });
+    phones.appendChild(
+      el('path', {
+        class: 'ao-rig__phones-band',
+        d: 'M74,118 L74,98 Q74,60 164,60 Q254,60 254,98 L254,110',
+      }),
+    );
+
+    const cupOn = el('g', { class: 'ao-rig__phones-cup ao-rig__phones-cup--on' });
+    cupOn.appendChild(
+      el('rect', { class: 'ao-rig__phones-shell', x: 58, y: 96, width: 32, height: 48, rx: 11 }),
+    );
+    cupOn.appendChild(
+      el('rect', { class: 'ao-rig__phones-pad', x: 74, y: 103, width: 14, height: 34, rx: 7 }),
+    );
+    phones.appendChild(cupOn);
+
+    // Hinged at the band end and rotated outward, so a gap opens at the ear.
+    const cupOff = el('g', {
+      class: 'ao-rig__phones-cup ao-rig__phones-cup--off',
+      transform: 'rotate(-28 254 104)',
+    });
+    cupOff.appendChild(
+      el('rect', { class: 'ao-rig__phones-shell', x: 238, y: 96, width: 32, height: 48, rx: 11 }),
+    );
+    cupOff.appendChild(
+      el('rect', { class: 'ao-rig__phones-pad', x: 240, y: 103, width: 14, height: 34, rx: 7 }),
+    );
+    phones.appendChild(cupOff);
+
+    head.appendChild(phones);
+  }
+
   torso.appendChild(head);
 
   torso.appendChild(
@@ -298,6 +342,7 @@ function buildMascot(opts) {
   const parts = {
     torso,
     head,
+    ...(phones ? { headphones: phones } : null),
     armL_upper,
     armL_lower,
     armR_upper,
@@ -323,6 +368,8 @@ function buildMascot(opts) {
  * @param {number} [opts.scale=1] initial uniform scale
  * @param {boolean} [opts.clamp=true] clamp pose angles to JOINT_LIMITS
  * @param {boolean} [opts.baton=true] draw the conductor baton
+ * @param {boolean} [opts.headphones=false] draw DJ headphones, one cup off the ear
+ * @param {'right'|'both'} [opts.paws='right'] which forearms get a hand
  * @param {boolean} [opts.shadow=true] draw the ground shadow
  * @param {string} [opts.className] extra class on the <svg>
  * @param {string} [opts.title='AO mascot'] accessible name
