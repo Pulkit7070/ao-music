@@ -14,12 +14,14 @@
 const RAMP = ' .:-=+*#%@';
 const BOOTH_RAMP = ' .`,:;i!+*';
 
-// Kinds, in paint order. Higher kinds draw over lower ones. The gear is below
-// the mascot on purpose: nothing may cover his hands or his legs.
+// Kinds, in paint order. Higher kinds draw over lower ones. The cabinet is in
+// front of the mascot, which is what hides his legs and puts him behind the
+// gear; his hands stay clear because the stance keeps them above its top edge.
 const NONE = 0;
 const ACCENT = 1;
-const BOOTH = 2;
-const MASCOT = 3;
+const MASCOT = 2;
+const BOOTH = 3;
+const CHROME = 4;
 
 const GLYPH_ASPECT = 0.58; // width / height of a monospace character cell
 
@@ -334,81 +336,147 @@ export function createAsciiStage(container) {
   }
 
   // -- the boombox -----------------------------------------------------------
+  //
+  // Drawn as a built object, not as texture: regular grille lines, hard chrome
+  // edges, filled cones. Random dither reads as static, and static is what made
+  // the first cabinet look like noise instead of gear.
 
-  const BOX = { left: -46, right: 420, top: 250, bottom: 362 };
+  const BOX = { left: -60, right: 434, top: 250, bottom: 366 };
+  const CX = 187;
+  const CONE_R = 46;
   const SPEAKERS = [
-    { x: 48, y: 306 },
-    { x: 328, y: 306 },
+    { x: CX - 142, y: 310 },
+    { x: CX + 142, y: 310 },
   ];
 
-  function stampBoombox(s, f, dt, tempo, beatFlash) {
-    const { left, right, top, bottom } = BOX;
-
-    // Carry handle, up over his head like the frame on a real ghetto blaster.
-    stampLine(left + 58, top, left + 58, 64, 2.4, 0.85, BOOTH);
-    stampLine(right - 58, top, right - 58, 64, 2.4, 0.85, BOOTH);
-    stampLine(left + 52, 64, right - 52, 64, 3.2, 0.95, BOOTH);
-    stampLine(176, 58, 224, 58, 4.5, 1, BOOTH);
-
-    // Body: outline plus a thin scatter, so it is solid enough to stand behind
-    // but never a wall of characters.
-    stampLine(left, top, right, top, 2.6, 1, BOOTH);
-    stampLine(left, bottom, right, bottom, 2.2, 0.8, BOOTH);
-    stampLine(left, top, left, bottom, 2.2, 0.9, BOOTH);
-    stampLine(right, top, right, bottom, 2.2, 0.9, BOOTH);
-    const j0 = Math.max(0, Math.floor(gy(top)));
-    const j1 = Math.min(rows - 1, Math.ceil(gy(bottom)));
+  /** Filled disc with a radial density profile, for the cones. */
+  function stampCone(cx, cy, r, s) {
+    const i0 = Math.max(0, Math.floor(gx(cx - r)));
+    const i1 = Math.min(cols - 1, Math.ceil(gx(cx + r)));
+    const j0 = Math.max(0, Math.floor(gy(cy - r)));
+    const j1 = Math.min(rows - 1, Math.ceil(gy(cy + r)));
     for (let j = j0; j <= j1; j++) {
-      for (let i = 0; i < cols; i++) {
-        const x = vx(i);
-        if (x < left || x > right) continue;
-        const n = noise[j * cols + i];
-        if (n > 0.09) continue;
-        put(i, j, 0.22 + 0.2 * n + 0.12 * s.energy, BOOTH);
+      const dy = vy(j) - cy;
+      for (let i = i0; i <= i1; i++) {
+        const dx = vx(i) - cx;
+        const d = Math.hypot(dx, dy);
+        if (d > r) continue;
+        const t = d / r;
+        // Smooth concentric bands. Anything busier than this stops reading as
+        // a speaker and starts reading as texture.
+        if (t > 0.88) {
+          put(i, j, 1, CHROME); // bezel
+        } else if (t > 0.78) {
+          put(i, j, 0.35, BOOTH); // surround
+        } else if (t > 0.68) {
+          put(i, j, 0.8, CHROME); // outer rib
+        } else if (t > 0.34) {
+          put(i, j, 0.4 + 0.4 * s.bass * s.energy, CHROME); // cone
+        } else if (t > 0.26) {
+          put(i, j, 0.85, CHROME); // inner rib
+        } else {
+          put(i, j, 0.55 + 0.45 * s.kick, CHROME); // dust cap
+        }
       }
     }
+  }
 
-    // Two big cones. They pulse on the bass and the inner ring spins at the
-    // tempo, so the speed of the track is visible in the gear as well.
+  /** Filled axis-aligned rect in world units. */
+  function stampRect(x0, y0, x1, y1, d, k) {
+    const i0 = Math.max(0, Math.floor(gx(x0)));
+    const i1 = Math.min(cols - 1, Math.ceil(gx(x1)));
+    const j0 = Math.max(0, Math.floor(gy(y0)));
+    const j1 = Math.min(rows - 1, Math.ceil(gy(y1)));
+    for (let j = j0; j <= j1; j++) {
+      const y = vy(j);
+      if (y < y0 || y > y1) continue;
+      for (let i = i0; i <= i1; i++) {
+        const x = vx(i);
+        if (x < x0 || x > x1) continue;
+        put(i, j, d, k);
+      }
+    }
+  }
+
+  function stampBoombox(s, f, dt, tempo) {
+    const { left, right, top, bottom } = BOX;
+
+    // No carry handle: in ASCII the posts and bar draw a box around the mascot
+    // and read as a picture frame rather than as part of the machine. The top
+    // deck carries a row of dials instead, which says stereo without occluding
+    // him.
+
+    // Cabinet: chrome lip, dial row, then a flat face broken by rails. A flat
+    // face reads as one solid object; anything speckled reads as noise.
+    stampRect(left, top, right, top + 7, 1, CHROME);
+    for (let i = 0; i < 9; i++) {
+      const x = CX - 152 + i * 38;
+      if (Math.abs(x - CX) < 70) continue; // leave the centre stack clear
+      stampDisc(x, top + 16, 6, 0.75, CHROME);
+      stampDisc(x, top + 16, 2.4, 1, CHROME);
+    }
+    stampRect(left, top + 8, right, bottom, 0.3, BOOTH);
+    stampRect(left, top + 26, right, top + 28, 0.6, CHROME);
+    stampRect(left, bottom - 5, right, bottom, 0.8, CHROME);
+
+    // Side vents, one slat pair per end.
+    for (let v = 0; v < 4; v++) {
+      stampRect(left + 12 + v * 11, top + 40, left + 16 + v * 11, bottom - 18, 0.62, CHROME);
+      stampRect(right - 16 - v * 11, top + 40, right - 12 - v * 11, bottom - 18, 0.62, CHROME);
+    }
+
+    // Cones. They pump on the bass and the spoke turns at the tempo, so the
+    // speed of the track shows in the gear as well as in the mascot.
     platterAngle += dt * (0.4 + 4.5 * s.energy) * tempo;
-    const pump = 1 + 0.07 * s.bass * s.energy + 0.06 * s.kick;
+    const pump = 1 + 0.06 * s.bass * s.energy + 0.05 * s.kick;
     for (const sp of SPEAKERS) {
-      stampEllipseRing(sp.x, sp.y, 46 * pump, 46 * pump, 2.4, 0.9, BOOTH);
-      stampEllipseRing(sp.x, sp.y, 34 * pump, 34 * pump, 2, 0.5 + 0.4 * s.bass, BOOTH);
-      stampEllipseRing(sp.x, sp.y, 20 * pump, 20 * pump, 2, 0.45 + 0.5 * s.kick, BOOTH);
-      stampDisc(sp.x, sp.y, 6 + 3 * s.kick, 1, BOOTH);
+      stampCone(sp.x, sp.y, CONE_R * pump, s);
       const a = platterAngle;
       stampLine(
-        sp.x + Math.cos(a) * 8, sp.y + Math.sin(a) * 8,
-        sp.x + Math.cos(a) * 18 * pump, sp.y + Math.sin(a) * 18 * pump,
-        1.6, 0.9, BOOTH,
+        sp.x + Math.cos(a) * 6, sp.y + Math.sin(a) * 6,
+        sp.x + Math.cos(a) * 30 * pump, sp.y + Math.sin(a) * 30 * pump,
+        1.6, 1, CHROME,
       );
     }
 
-    // Centre stack: tuner strip, cassette door, buttons, and a VU pair that
-    // moves with the bands rather than with the overall level.
-    stampLine(150, 262, 250, 262, 1.6, 0.5, BOOTH);
-    for (let i = 0; i < 9; i++) {
-      const x = 152 + i * 12;
-      stampLine(x, 258, x, 266, 1.2, i % 2 ? 0.4 : 0.7, BOOTH);
+    // Centre stack: tuner, cassette door with turning hubs, VU pair, buttons.
+    stampRect(CX - 62, 264, CX + 62, 278, 0.3, BOOTH);
+    stampRect(CX - 62, 264, CX + 62, 266, 0.8, CHROME);
+    for (let i = 0; i < 11; i++) {
+      const x = CX - 57 + i * 11.4;
+      stampRect(x, 268, x + 1.6, i % 2 ? 272 : 276, 0.7, CHROME);
     }
-    const needle = 152 + 96 * clamp(s.crossfade, 0, 1);
-    stampLine(needle, 256, needle, 268, 1.8, 1, BOOTH);
+    const needle = CX - 57 + 114 * clamp(s.crossfade, 0, 1);
+    stampRect(needle - 1.4, 265, needle + 1.4, 278, 1, CHROME);
 
-    stampLine(160, 276, 240, 276, 1.6, 0.7, BOOTH);
-    stampLine(160, 306, 240, 306, 1.6, 0.7, BOOTH);
-    stampLine(160, 276, 160, 306, 1.6, 0.7, BOOTH);
-    stampLine(240, 276, 240, 306, 1.6, 0.7, BOOTH);
-    stampDisc(182, 291, 5 + 2 * s.kick, 0.8, BOOTH);
-    stampDisc(218, 291, 5 + 2 * s.kick, 0.8, BOOTH);
+    stampRect(CX - 56, 286, CX + 56, 326, 0.16, BOOTH);
+    stampRect(CX - 56, 286, CX + 56, 289, 0.9, CHROME);
+    stampRect(CX - 56, 323, CX + 56, 326, 0.9, CHROME);
+    stampRect(CX - 56, 286, CX - 52, 326, 0.9, CHROME);
+    stampRect(CX + 52, 286, CX + 56, 326, 0.9, CHROME);
+    for (const hub of [CX - 24, CX + 24]) {
+      stampDisc(hub, 306, 12, 0.5, BOOTH);
+      const a = platterAngle * 0.6;
+      stampLine(hub + Math.cos(a) * 4, 306 + Math.sin(a) * 4, hub + Math.cos(a) * 11, 306 + Math.sin(a) * 11, 1.6, 1, CHROME);
+      stampDisc(hub, 306, 3.2, 1, CHROME);
+    }
 
-    const vuL = clamp(s.bass * s.energy, 0, 1);
-    const vuR = clamp(s.high * s.energy + 0.05, 0, 1);
-    stampLine(160, 318, 160 + 34 * vuL, 318, 2.4, 1, BOOTH);
-    stampLine(206, 318, 206 + 34 * vuR, 318, 2.4, 1, BOOTH);
-    for (let i = 0; i < 6; i++) {
-      const x = 162 + i * 14;
-      stampLine(x, 330, x, 330 + 8 * (0.3 + 0.7 * s.fader), 1.4, 0.6, BOOTH);
+    // Segmented VU: discrete blocks light up, the way a real meter does.
+    const meters = [
+      { x: CX - 56, value: clamp(s.bass * s.energy, 0, 1) },
+      { x: CX + 6, value: clamp(s.high * s.energy + 0.05, 0, 1) },
+    ];
+    for (const meter of meters) {
+      for (let i = 0; i < 7; i++) {
+        const lit = i / 7 < meter.value;
+        stampRect(meter.x + i * 7.4, 334, meter.x + i * 7.4 + 5, 342, lit ? 1 : 0.2, lit ? CHROME : BOOTH);
+      }
+    }
+
+    // Transport buttons.
+    for (let i = 0; i < 5; i++) {
+      const x = CX - 52 + i * 22;
+      stampRect(x, 350, x + 15, 360, i === 2 && s.kick > 0.4 ? 1 : 0.5, i === 2 ? CHROME : BOOTH);
     }
   }
 
@@ -455,11 +523,18 @@ export function createAsciiStage(container) {
           const light = clamp(38 + 44 * intensity + 14 * beatFlash, 20, 92);
           colour = `hsl(${rowHue.toFixed(0)} ${(45 + 45 * s.energy).toFixed(0)}% ${light.toFixed(0)}%)`;
         } else if (k === BOOTH) {
-          intensity = density[idx] * (0.5 + 0.5 * lift) + n * 0.1;
-          colour = `hsl(${((hue + 180) % 360).toFixed(0)} ${(20 + 30 * s.energy).toFixed(0)}% ${clamp(
-            22 + 32 * intensity,
-            14,
-            70,
+          // The cabinet is steel: nearly colourless, so it never competes with
+          // the mascot or the cones for attention.
+          intensity = density[idx];
+          colour = `hsl(210 10% ${clamp(16 + 40 * intensity, 12, 62).toFixed(0)}%)`;
+        } else if (k === CHROME) {
+          // Chrome and cones carry the colour of the track, offset from the
+          // mascot's hue so he never blends into his own gear.
+          intensity = density[idx] * (0.6 + 0.4 * lift) + beatFlash * 0.12;
+          colour = `hsl(${((hue + 150) % 360).toFixed(0)} ${(35 + 50 * s.energy).toFixed(0)}% ${clamp(
+            40 + 46 * intensity,
+            24,
+            94,
           ).toFixed(0)}%)`;
         } else {
           intensity = density[idx] * lift + beatFlash * 0.3;
@@ -470,6 +545,7 @@ export function createAsciiStage(container) {
           ).toFixed(0)}%)`;
         }
         const ramp = k === BOOTH ? BOOTH_RAMP : RAMP;
+        // chrome and the mascot share the dense ramp; the cabinet uses the sparse one
         const glyph = ramp[clamp(Math.floor(intensity * (ramp.length - 1)), 0, ramp.length - 1)];
         if (glyph === ' ') { flush(i); continue; }
         if (colour !== runKey) {
@@ -512,7 +588,7 @@ export function createAsciiStage(container) {
     const view = { ...s, hueShift };
     stampSky(view, f, clock, beatFlash);
     stampRig(rig.svg);
-    stampBoombox(view, f, dt, tempo, beatFlash);
+    stampBoombox(view, f, dt, tempo);
     paint(view, f, beatFlash);
   }
 
