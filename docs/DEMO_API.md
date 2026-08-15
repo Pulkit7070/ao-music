@@ -235,6 +235,13 @@ top of that file, plus `headers` and `pollSeconds` if the endpoint needs them,
 or call `window.aoDisco.nowPlaying.configure({ url })` from the console to try
 one without editing anything.
 
+Each poll asks `POST /api/refresh` rather than reading `GET /api/status`. The
+monitor's own background reading can sit stale: it reported a paused deck while
+the track was audibly playing, and a forced re-read returned "playing" a second
+later. `refresh` answers with the fresh state, so one request does both jobs. If
+it is unavailable, the code falls back to reading the cached status and stops
+trying.
+
 Paste the base address, `/api/health` or `/api/status`: the other is derived,
 so nobody has to remember which one the page wants. Tracks come from `status`,
 reachability from `health`, and the Check button on the party page probes health

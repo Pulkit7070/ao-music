@@ -27,9 +27,13 @@ const STORAGE_KEY = 'ao.disco.booth.url';
  */
 export function endpointsFor(url) {
   const text = String(url || '').trim().replace(/\/+$/, '');
-  if (!text) return { status: '', health: '' };
-  const base = text.replace(/\/api\/(status|health|current|upcoming)$/i, '');
-  return { status: `${base}/api/status`, health: `${base}/api/health` };
+  if (!text) return { status: '', health: '', refresh: '' };
+  const base = text.replace(/\/api\/(status|health|current|upcoming|refresh)$/i, '');
+  return {
+    status: `${base}/api/status`,
+    health: `${base}/api/health`,
+    refresh: `${base}/api/refresh`,
+  };
 }
 
 export const CONFIG = {
@@ -142,6 +146,8 @@ export function createNowPlaying(config = {}) {
   let state = null;
   let health = null;
   let reachable = false;
+  // null until tried, then whether POST /api/refresh works here.
+  let refreshWorks = null;
   let status = settings.url ? 'connecting' : 'off';
   const listeners = new Set();
 
@@ -209,14 +215,43 @@ export function createNowPlaying(config = {}) {
       return;
     }
     try {
-      const response = await fetch(statusUrl, { headers: settings.headers, cache: 'no-store' });
-      if (!response.ok) {
-        reachable = false;
-        setStatus(`error ${response.status}`);
-        return;
+      // The monitor's own polling can sit on a stale reading: it reported a
+      // paused deck while the track was audibly playing, and a forced re-read
+      // returned "playing" a second later. /api/refresh exists for exactly
+      // that, and answers with the fresh state, so one request does both. If
+      // it is not available here, fall back to reading the cache.
+      let body = null;
+      if (refreshWorks !== false) {
+        try {
+          const forced = await fetch(endpointsFor(settings.url).refresh, {
+            method: 'POST',
+            headers: settings.headers,
+            cache: 'no-store',
+          });
+          if (forced.ok) {
+            const parsed = await forced.json();
+            if (parsed && typeof parsed === 'object' && 'djayRunning' in parsed) {
+              body = parsed;
+              refreshWorks = true;
+            }
+          }
+        } catch {
+          // blocked, not allowed, or not implemented: stop trying it
+        }
+        if (!body) refreshWorks = false;
+      }
+
+      if (!body) {
+        const response = await fetch(statusUrl, { headers: settings.headers, cache: 'no-store' });
+        if (!response.ok) {
+          reachable = false;
+          setStatus(`error ${response.status}`);
+          return;
+        }
+        body = await response.json();
       }
       reachable = true;
-      const next = normalise(await response.json());
+      const next = normalise(body);
       const changed = JSON.stringify(next) !== JSON.stringify(state);
       state = next;
       status = !next ? 'unreadable response' : next.current ? 'live' : next.running ? 'djay idle' : 'djay not running';
