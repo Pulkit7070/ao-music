@@ -189,10 +189,18 @@ h2 {
   right: 0;
   z-index: 2;
   padding: clamp(12px, 1.6vw, 28px) clamp(14px, 1.8vw, 32px);
-  max-width: min(56%, 720px);
+  max-width: min(46%, 620px);
   text-align: right;
   pointer-events: none;
   text-shadow: 0 0 10px #000, 0 0 3px #000;
+  /* It sits over the mascot, so it needs to win without becoming a box: a fade
+     to black under it rather than a panel around it. */
+  background: linear-gradient(
+    to left,
+    rgba(0, 0, 0, 0.9),
+    rgba(0, 0, 0, 0.72) 60%,
+    rgba(0, 0, 0, 0)
+  );
 }
 
 .ticker__label {
@@ -223,8 +231,8 @@ h2 {
   list-style: none;
   margin: clamp(3px, 0.4vw, 8px) 0 0;
   padding: 0;
-  font-size: clamp(13px, 1.35vw, 27px);
-  line-height: 1.45;
+  font-size: clamp(12px, 1.15vw, 22px);
+  line-height: 1.4;
   color: var(--text);
 }
 
