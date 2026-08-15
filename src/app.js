@@ -346,8 +346,48 @@ function renderTicker() {
   }
 }
 
+/** "01:15" -> 75. Anything unparseable is 0. */
+function seconds(stamp) {
+  const parts = String(stamp || '').replace('-', '').split(':').map(Number);
+  if (parts.length !== 2 || parts.some((n) => !Number.isFinite(n))) return 0;
+  return parts[0] * 60 + parts[1];
+}
+
+/** Loose title match: case, punctuation and "artist - title" order all vary. */
+function sameTrack(a, b) {
+  const key = (text) => String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const x = key(a);
+  const y = key(b);
+  if (!x || !y) return false;
+  return x === y || x.includes(y) || y.includes(x);
+}
+
+// Advance the request queue when a track actually finishes. The booth is the
+// only thing that knows: it reports which deck is playing and what is on it,
+// so a change of track means the last one is done. Marking it played here is
+// what keeps the floor's list moving in order without the DJ touching it.
+let playing = null; // { title, elapsed } of the booth track we last saw
+
+function advanceQueue(next) {
+  const finished = playing;
+  playing = next ? { title: next.title, elapsed: seconds(next.elapsed) } : null;
+  if (!finished || (next && sameTrack(finished.title, next.title))) return;
+  // A few seconds of a track is a preview or a mistake, not a play.
+  if (finished.elapsed < 20) return;
+
+  const pending = store.pending();
+  if (!pending.length) return;
+
+  // If the finished track was a request, mark it and anything the DJ skipped
+  // over above it. Otherwise the head of the queue has had its turn.
+  const index = pending.findIndex((row) => sameTrack(row.song, finished.title));
+  const upTo = index === -1 ? 0 : index;
+  for (let i = 0; i <= upTo; i++) store.markPlayed(pending[i].id);
+}
+
 nowPlaying.subscribe((state, status) => {
   booth = state;
+  advanceQueue(state && state.current);
   const on = Boolean(state && state.current);
   feedStatus.dataset.live = on ? 'yes' : 'no';
   feedStatus.textContent = !nowPlaying.isEnabled()

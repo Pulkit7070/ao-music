@@ -241,6 +241,13 @@ long as `normalise()` can find a title: it already accepts the usual wrappers
 artist and playing. When the real contract arrives, `normalise()` is the one
 function to adjust.
 
+The queue also advances itself. A change of track at the booth means the last
+one finished, so the request it matches is marked played, along with anything
+the DJ skipped over above it; if the finished track matched nothing in the
+queue, the head has had its turn and is marked instead. A track that played for
+under twenty seconds is a preview and consumes nothing. With no booth feed, the
+Played buttons are the only thing that moves the queue.
+
 When the feed reports a track the stage shows it and the whole request queue
 becomes up next, because the booth knows what is on the speakers and the queue
 only knows what was asked for. Requests carry an optional link; only `http` and
