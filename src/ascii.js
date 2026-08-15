@@ -14,11 +14,12 @@
 const RAMP = ' .:-=+*#%@';
 const BOOTH_RAMP = ' .`,:;i!+*';
 
-// Kinds, in paint order. Higher kinds draw over lower ones.
+// Kinds, in paint order. Higher kinds draw over lower ones. The gear is below
+// the mascot on purpose: nothing may cover his hands or his legs.
 const NONE = 0;
 const ACCENT = 1;
-const MASCOT = 2;
-const BOOTH = 3;
+const BOOTH = 2;
+const MASCOT = 3;
 
 const GLYPH_ASPECT = 0.58; // width / height of a monospace character cell
 
@@ -62,7 +63,7 @@ export function createAsciiStage(container) {
   let offY = 0;
   let worldLeft = 0;
   let worldRight = VIEW_W;
-  const FRAME = { cx: 172, top: -26, bottom: 372 };
+  const FRAME = { cx: 178, top: 40, bottom: 348 };
   let density = new Float32Array(0);
   let kind = new Uint8Array(0);
   let noise = new Float32Array(0);
@@ -206,18 +207,22 @@ export function createAsciiStage(container) {
       // The interior light and shade patches would print as hard rectangles
       // inside the silhouette.
       if (cls.includes('ao-rig__light') || cls.includes('ao-rig__shade')) continue;
-      // Far limbs sit behind the booth and only muddy the outline.
-      if (el.closest('[data-leg="far"]')) continue;
-
       const tag = el.tagName.toLowerCase();
       let role = 'fill';
       let weight = 0.42;
+      // The far pair of legs reads as depth, like the four stubby legs in the
+      // logo, so it is drawn lighter rather than dropped.
+      const far = Boolean(el.closest('[data-leg="far"]'));
+      if (far) weight = 0.26;
       if (cls.includes('ao-rig__outline')) {
         role = 'edge';
-        weight = 1;
+        weight = far ? 0.62 : 1;
       } else if (cls.includes('ao-rig__eye')) {
         role = 'eye';
         weight = 1;
+      } else if (cls.includes('ao-rig__paw')) {
+        // The hands are what make the pose readable, so they print solid.
+        weight = far ? 0.4 : 0.85;
       } else if (cls.includes('phones-shell')) {
         weight = 0.9;
       } else if (cls.includes('phones-pad')) {
@@ -296,40 +301,40 @@ export function createAsciiStage(container) {
   let platterAngle = 0;
 
   function stampBooth(s, dt, tempo) {
-    // Deck: a platter that turns at the tempo he is actually hearing.
+    // The gear stands either side of him rather than in front, so the whole
+    // logo silhouette stays visible: both hands, all four legs, the tail stub.
+
+    // Deck on his right, under the hand that rides the platter. It turns at the
+    // tempo he is hearing, so the speed on screen is the speed of the track.
     platterAngle += dt * (0.5 + 5.5 * s.energy) * tempo;
-    const px = 306;
-    const py = 232;
-    stampEllipseRing(px, py, 48, 21, 2.4, 0.85, BOOTH);
-    stampEllipseRing(px, py, 17, 7.5, 2, 0.7 + 0.3 * s.kick, BOOTH);
+    const px = 318;
+    const py = 236;
+    stampEllipseRing(px, py, 40, 17, 2.2, 0.8, BOOTH);
+    stampEllipseRing(px, py, 14, 6, 1.8, 0.65 + 0.35 * s.kick, BOOTH);
     const a = platterAngle;
-    stampLine(px + Math.cos(a) * 17, py + Math.sin(a) * 7.5, px + Math.cos(a) * 46, py + Math.sin(a) * 20, 2, 1, BOOTH);
+    stampLine(
+      px + Math.cos(a) * 14, py + Math.sin(a) * 6,
+      px + Math.cos(a) * 38, py + Math.sin(a) * 16,
+      1.8, 1, BOOTH,
+    );
+    stampLine(278, 254, 358, 254, 1.4, 0.5, BOOTH);
 
-    // Mixer: two channel faders and a crossfader, riding the same values his
-    // hands are riding.
-    stampLine(24, 200, 24, 246, 1.6, 0.5, BOOTH);
-    stampLine(46, 200, 46, 246, 1.6, 0.5, BOOTH);
-    stampLine(16, 244 - 42 * s.fader, 32, 244 - 42 * s.fader, 2.4, 1, BOOTH);
-    stampLine(38, 244 - 42 * clamp(s.bass * s.energy + 0.08, 0, 1), 54, 244 - 42 * clamp(s.bass * s.energy + 0.08, 0, 1), 2.4, 1, BOOTH);
-    stampLine(14, 258, 96, 258, 1.4, 0.45, BOOTH);
-    const cf = 14 + 74 * s.crossfade;
-    stampLine(cf, 252, cf, 264, 2.2, 1, BOOTH);
+    // Mixer on his left: two channel faders and a crossfader, on the values his
+    // left hand is riding.
+    stampLine(22, 202, 22, 244, 1.5, 0.45, BOOTH);
+    stampLine(42, 202, 42, 244, 1.5, 0.45, BOOTH);
+    stampLine(15, 242 - 38 * s.fader, 29, 242 - 38 * s.fader, 2.2, 1, BOOTH);
+    const chB = clamp(s.bass * s.energy + 0.08, 0, 1);
+    stampLine(35, 242 - 38 * chB, 49, 242 - 38 * chB, 2.2, 1, BOOTH);
+    stampLine(12, 254, 74, 254, 1.4, 0.45, BOOTH);
+    const cf = 12 + 56 * s.crossfade;
+    stampLine(cf, 249, cf, 259, 2, 1, BOOTH);
 
-    // Booth face: a hard top edge that cuts his legs off, then a thinning
-    // scatter below it, so the box reads without swallowing the frame.
-    const top = Math.max(0, Math.floor(gy(268)));
-    for (let j = top; j < rows; j++) {
-      const depth = (j - top) / Math.max(1, rows - top);
-      for (let i = 0; i < cols; i++) {
-        const idx = j * cols + i;
-        if (j === top) {
-          put(i, j, 0.95, BOOTH);
-          continue;
-        }
-        const n = noise[idx];
-        if (n > 0.3 - depth * 0.26) continue;
-        put(i, j, (0.42 - depth * 0.3) * (0.45 + 0.55 * s.energy) + n * 0.12, BOOTH);
-      }
+    // Floor: one line under his feet, and nothing else down there.
+    for (let i = 0; i < cols; i++) {
+      const x = vx(i);
+      const n = noise[(Math.floor(gy(318)) * cols + i) % noise.length];
+      if (x > 60 && x < 290 ? true : n < 0.7) put(i, Math.round(gy(318)), 0.55 + 0.3 * s.energy, BOOTH);
     }
   }
 

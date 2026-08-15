@@ -79,6 +79,7 @@ const readEnergy = $('read-energy');
 const readBpm = $('read-bpm');
 const readBeats = $('read-beats');
 const readState = $('read-state');
+const readPulse = $('read-pulse');
 const beatDot = $('beat-dot');
 const partyState = $('party-state');
 const partyLevel = $('party-level');
@@ -91,7 +92,9 @@ let lastText = 0;
 function stateLabel(s) {
   if (s.gesture === 'handUp') return 'reacting to the drop';
   if (!s.live && s.quietFor > 0.6) return s.gesture ? 'idle gesture' : 'still, waiting for sound';
-  if (s.kick > 0.3) return 'riding the kick';
+  // Loud but arrhythmic is a room, not a track, and he ignores it on purpose.
+  if (s.music < 0.25) return s.level > 0.05 ? 'noise, not music: holding still' : 'listening for a beat';
+  if (s.kick > 0.3) return `riding the beat at ${s.bpm.toFixed(0)}`;
   if (s.energy > 0.55) return 'full energy';
   if (s.energy > 0.15) return 'working the deck';
   return 'settling';
@@ -133,6 +136,7 @@ deck.subscribe((f) => {
     readEnergy.textContent = state.energy.toFixed(2);
     readBpm.textContent = `${f.bpm.toFixed(0)} BPM`;
     readBeats.textContent = String(beats);
+    readPulse.textContent = state.music.toFixed(2);
     readState.textContent = label;
     partyState.textContent = label;
   }
