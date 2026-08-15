@@ -121,6 +121,9 @@ export function normalise(body) {
     playingDeck: body.playingDeck ?? null,
     current,
     upcoming,
+    // The monitor's own word for what djay is doing: playing, paused, and so
+    // on. Better in front of the DJ than anything invented here.
+    deckStatus: typeof body.status === 'string' ? body.status : '',
     updatedAt: typeof body.updatedAt === 'string' ? body.updatedAt : '',
   };
 }

@@ -436,13 +436,21 @@ nowPlaying.subscribe((state, status) => {
   queueUI.setLive(state && state.current, nowPlaying.isReachable());
   const on = Boolean(state && state.current);
   feedStatus.dataset.live = on ? 'yes' : 'no';
+  // Say what djay is doing in its own words, and only mention the queue
+  // standing in when it actually is: with the monitor answering, it is not.
   feedStatus.textContent = !nowPlaying.isEnabled()
     ? 'Booth feed off. Now playing comes from the queue.'
     : on
       ? `djay Pro, deck ${state.current.deck}: ${state.current.title}${
           state.current.artist ? ` - ${state.current.artist}` : ''
         }${state.current.remaining ? ` (${state.current.remaining})` : ''}`
-      : `Booth feed at ${nowPlaying.getUrl() || 'no address'}: ${status}. Showing the queue meanwhile.`;
+      : nowPlaying.isReachable()
+        ? state && state.running
+          ? `djay Pro is ${state.deckStatus || 'idle'}, nothing playing${
+              state.upcoming ? `. Deck ${state.upcoming.deck} has ${state.upcoming.title}` : ''
+            }`
+          : 'Monitor is up, but djay Pro is not running.'
+        : `Booth feed at ${nowPlaying.getUrl() || 'no address'}: ${status}. Showing the queue meanwhile.`;
   // Show the address in the field, not just as a placeholder: a feed pointed at
   // the wrong host looks exactly like a feed that is down.
   if (document.activeElement !== boothUrlInput) boothUrlInput.value = nowPlaying.getUrl();
