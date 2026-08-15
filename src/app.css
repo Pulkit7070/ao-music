@@ -153,7 +153,7 @@ h2 {
   border: 1px solid var(--border);
   padding: 5px 10px;
   cursor: pointer;
-  opacity: 0.5;
+  opacity: 0.75;
 }
 
 .stage-button:hover {
@@ -234,6 +234,14 @@ h2 {
 
 .ticker__next li + li + li {
   opacity: 0.4;
+}
+
+/* The control sits with the thing it controls: you press this while you are
+   reading the queue, not while looking at the other corner of the screen. */
+.ticker__advance {
+  position: static;
+  margin-top: 12px;
+  pointer-events: auto;
 }
 
 .stage-caption {
