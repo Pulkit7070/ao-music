@@ -127,6 +127,7 @@ export function mountQueueUI(store, nodes) {
   // about it: two panels both headed "now playing", one reading the decks and
   // one reading the request list, is how you end up wondering which is lying.
   let live = null;
+  let onAir = false;
 
   nodes.form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -189,8 +190,10 @@ export function mountQueueUI(store, nodes) {
     const pending = store.pending();
     // With a live track from the booth, nothing in the queue has played yet, so
     // every request is still to come.
-    const current = live ? null : pending[0] || null;
-    const upNext = live ? pending : pending.slice(1);
+    // The monitor is the authority whenever it is answering, so no request is
+    // ever shown as playing while it is connected.
+    const current = live || onAir ? null : pending[0] || null;
+    const upNext = live || onAir ? pending : pending.slice(1);
 
     nodes.now.innerHTML = '';
     if (live) {
@@ -224,8 +227,10 @@ export function mountQueueUI(store, nodes) {
     } else {
       delete nodes.now.dataset.id;
       delete nodes.now.dataset.live;
-      nodes.now.innerHTML =
-        '<p class="queue__label">Now playing</p><p class="queue__empty">Nothing queued yet. First request goes straight on.</p>';
+      const note = onAir
+        ? 'Nothing is playing at the decks.'
+        : 'Nothing queued yet. First request goes straight on.';
+      nodes.now.innerHTML = `<p class="queue__label">Now playing</p><p class="queue__empty">${note}</p>`;
     }
 
     nodes.list.innerHTML = '';
@@ -246,9 +251,13 @@ export function mountQueueUI(store, nodes) {
   store.subscribe(render);
 
   return {
-    /** Tell the card what the booth is playing, or null when it is not. */
-    setLive(track) {
+    /**
+     * Tell the card what the booth is playing, or null when it is not, and
+     * whether the monitor is answering at all.
+     */
+    setLive(track, monitorAnswering) {
       live = track || null;
+      onAir = Boolean(monitorAnswering);
       render();
     },
   };

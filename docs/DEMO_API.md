@@ -262,6 +262,13 @@ song ended, so the queue has to be moved by hand: the Played buttons on the
 party page, the "Played, next" button in the corner of the stage, or the N key,
 which works in full screen and is ignored while a guest is typing a request.
 
+While the monitor is answering it is the only thing that says what is playing,
+including when the answer is nothing: "nothing playing, djay is running, nothing
+on the decks", or "djay is not running". A request is something that was asked
+for, not something that is on, so no request is shown as playing while the
+monitor is connected. The queue only stands in when there is no monitor to ask,
+which is what keeps the party page usable on its own.
+
 When the feed reports a track, both the stage ticker and the queue card show it,
 headed "now playing, from djay", and the whole request queue becomes up next, because the booth knows what is on the speakers and the queue
 only knows what was asked for. Requests carry an optional link; only `http` and

@@ -138,6 +138,7 @@ export function createNowPlaying(config = {}) {
   let timer = 0;
   let state = null;
   let health = null;
+  let reachable = false;
   let status = settings.url ? 'connecting' : 'off';
   const listeners = new Set();
 
@@ -200,15 +201,18 @@ export function createNowPlaying(config = {}) {
     if (!settings.url) return;
     const { status: statusUrl } = endpointsFor(settings.url);
     if (blockedByMixedContent(statusUrl)) {
+      reachable = false;
       setStatus('blocked: this page is https and the booth is http');
       return;
     }
     try {
       const response = await fetch(statusUrl, { headers: settings.headers, cache: 'no-store' });
       if (!response.ok) {
+        reachable = false;
         setStatus(`error ${response.status}`);
         return;
       }
+      reachable = true;
       const next = normalise(await response.json());
       const changed = JSON.stringify(next) !== JSON.stringify(state);
       state = next;
@@ -218,6 +222,7 @@ export function createNowPlaying(config = {}) {
       // Unreachable, wrong network, or CORS. Ask health for the reason, and
       // keep the last known track rather than blanking the stage over one
       // failed request.
+      reachable = false;
       const probe = await checkHealth();
       setStatus(probe.note || `unreachable: ${error.message}`);
     }
@@ -227,6 +232,7 @@ export function createNowPlaying(config = {}) {
     stop();
     if (!settings.url) {
       state = null;
+      reachable = false;
       setStatus('off');
       return;
     }
@@ -259,6 +265,11 @@ export function createNowPlaying(config = {}) {
     /** Probe /api/health on demand and report it in a sentence. */
     checkHealth,
     getHealth: () => health,
+    /**
+     * Did the last poll actually get an answer? When it did, the booth is the
+     * authority on what is playing, including when the answer is "nothing".
+     */
+    isReachable: () => reachable,
     getState: () => state,
     getStatus: () => status,
     getUrl: () => settings.url,

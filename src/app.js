@@ -336,20 +336,31 @@ function renderTicker() {
   const queued = pending[0];
   const live = booth && booth.current;
   nextButton.disabled = !queued;
-  // The booth wins when it is reporting: it knows what is actually on the
-  // decks, the queue only knows what was asked for.
-  const current = live
-    ? {
-        song: live.title,
-        name: [live.artist, live.remaining].filter(Boolean).join('  '),
-        fromApi: true,
-      }
-    : queued;
 
-  stageNow.textContent = current ? current.song : 'Nothing queued yet';
+  // While the monitor is answering, it is the only thing that says what is
+  // playing, including when the answer is nothing. A request is something that
+  // was asked for, not something that is on, and showing one as now playing is
+  // what made the two panels disagree. The queue only stands in when there is
+  // no monitor to ask.
+  const onAir = nowPlaying.isReachable();
+  const current = live
+    ? { song: live.title, name: [live.artist, live.remaining].filter(Boolean).join('  '), fromApi: true }
+    : onAir
+      ? null
+      : queued;
+
+  stageNow.textContent = current
+    ? current.song
+    : onAir
+      ? 'Nothing playing'
+      : 'Nothing queued yet';
   if (current) {
     const by = document.createElement('small');
     by.textContent = current.fromApi ? current.name : `requested by ${current.name}`;
+    stageNow.appendChild(by);
+  } else if (onAir) {
+    const by = document.createElement('small');
+    by.textContent = booth && booth.running ? 'djay is running, nothing on the decks' : 'djay is not running';
     stageNow.appendChild(by);
   }
 
@@ -365,7 +376,7 @@ function renderTicker() {
   }
   // With a live track on, nothing in the queue has been played yet, so the
   // whole queue is still up next.
-  const upNext = (live ? pending : pending.slice(1)).slice(0, cued ? 2 : 3);
+  const upNext = (live || onAir ? pending : pending.slice(1)).slice(0, cued ? 2 : 3);
   for (const row of upNext) {
     const li = document.createElement('li');
     li.textContent = `${row.song} / ${row.name}`;
@@ -422,7 +433,7 @@ function advanceQueue(next) {
 nowPlaying.subscribe((state, status) => {
   booth = state;
   advanceQueue(state && state.current);
-  queueUI.setLive(state && state.current);
+  queueUI.setLive(state && state.current, nowPlaying.isReachable());
   const on = Boolean(state && state.current);
   feedStatus.dataset.live = on ? 'yes' : 'no';
   feedStatus.textContent = !nowPlaying.isEnabled()
