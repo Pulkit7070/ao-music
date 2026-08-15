@@ -8,11 +8,16 @@ import { createRig } from './rig.js';
 import { createConsole } from './console.js';
 import { createAsciiStage } from './ascii.js';
 import { createChoreo } from './choreo.js';
-import { createQueueStore, mountQueueUI } from './queue.js';
+import { createQueueStore, mountQueueUI, resolveQueueUrl } from './queue.js';
 import { createNowPlaying } from './nowplaying.js';
 import { createPulse } from './pulse.js';
 
 const ROUTES = ['dj', 'party'];
+// The shared queue server, so every phone that scans the QR code writes to the
+// same list the booth reads. Overridden by ?queue=... which is what the QR
+// carries, and which is remembered per device. Empty falls back to this
+// browser's own localStorage.
+const QUEUE_SERVER = 'https://gallery-effective-copper-simpsons.trycloudflare.com';
 const $ = (id) => document.getElementById(id);
 
 // -- stage --------------------------------------------------------------------
@@ -321,7 +326,9 @@ deck.subscribe((live) => {
 
 // -- party queue --------------------------------------------------------------
 
-const store = createQueueStore();
+// A shared queue when one is configured, so every phone that scans the QR code
+// is writing to the same list the booth is reading.
+const store = createQueueStore({ remote: resolveQueueUrl(QUEUE_SERVER) });
 const queueUI = mountQueueUI(store, {
   form: $('request-form'),
   name: $('request-name'),

@@ -5,7 +5,30 @@
 // is separate from the rendering so the DJ route can read the count too.
 
 const KEY = 'ao.disco.queue.v1';
+const REMOTE_KEY = 'ao.disco.queue.url';
 const MAX_LEN = 60;
+
+/**
+ * Where the shared queue lives, if there is one. Without it the queue is this
+ * browser's localStorage, which is per device: fine for one screen being typed
+ * at, useless for a room of phones scanning a QR code. Set with ?queue=... in
+ * the address, and remembered after that.
+ */
+export function resolveQueueUrl(fallback = '') {
+  try {
+    const fromQuery = new URLSearchParams(location.search).get('queue');
+    if (fromQuery !== null) {
+      const cleaned = fromQuery.trim().replace(/\/+$/, '');
+      localStorage.setItem(REMOTE_KEY, cleaned);
+      return cleaned;
+    }
+    const saved = localStorage.getItem(REMOTE_KEY);
+    if (saved !== null) return saved;
+  } catch {
+    // storage unavailable; the fallback stands
+  }
+  return fallback;
+}
 
 /**
  * Only http and https survive. A guest types this box, so anything else,
@@ -43,22 +66,76 @@ function safeParse(raw) {
   }
 }
 
-/** Reactive store over localStorage. */
-export function createQueueStore() {
-  let rows = safeParse(localStorage.getItem(KEY));
+/**
+ * Reactive store over localStorage, or over the shared queue server when one is
+ * configured. The shape is identical either way, so nothing that reads the
+ * queue needs to know which it is talking to.
+ *
+ * @param {object} [options]
+ * @param {string} [options.remote] base address of the queue server
+ * @param {number} [options.pollSeconds=2.5] how often to re-read it
+ */
+export function createQueueStore(options = {}) {
+  const remote = String(options.remote || '').replace(/\/+$/, '');
+  let rows = remote ? [] : safeParse(localStorage.getItem(KEY));
   const listeners = new Set();
   let counter = 0;
+  let reachable = !remote;
+  let lastError = '';
 
-  function persist() {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(rows));
-    } catch (error) {
-      console.warn('[ao-queue] could not persist the queue', error);
-    }
+  function announce() {
     for (const cb of listeners) cb(rows);
   }
 
+  function persist() {
+    if (!remote) {
+      try {
+        localStorage.setItem(KEY, JSON.stringify(rows));
+      } catch (error) {
+        console.warn('[ao-queue] could not persist the queue', error);
+      }
+    }
+    announce();
+  }
+
+  /** Talk to the queue server, and keep the last good rows if it is down. */
+  async function call(path, init) {
+    if (!remote) return;
+    try {
+      const response = await fetch(remote + path, {
+        cache: 'no-store',
+        ...init,
+        headers: init && init.body ? { 'Content-Type': 'application/json' } : undefined,
+      });
+      if (!response.ok) throw new Error(`server answered ${response.status}`);
+      const body = await response.json();
+      if (Array.isArray(body.rows)) {
+        const next = safeParse(JSON.stringify(body.rows));
+        const changed = JSON.stringify(next) !== JSON.stringify(rows);
+        rows = next;
+        reachable = true;
+        lastError = '';
+        if (changed) announce();
+        else announce();
+      }
+    } catch (error) {
+      reachable = false;
+      lastError = error.message;
+    }
+  }
+
+  if (remote) {
+    call('/api/queue');
+    setInterval(() => call('/api/queue'), Math.max(1, options.pollSeconds || 2.5) * 1000);
+  }
+
   return {
+    /** Is the shared queue in use, and is it answering? */
+    isShared: () => Boolean(remote),
+    isReachable: () => reachable,
+    getError: () => lastError,
+    getRemote: () => remote,
+
     all: () => rows,
     pending: () => rows.filter((row) => !row.played),
     played: () => rows.filter((row) => row.played),
@@ -80,6 +157,13 @@ export function createQueueStore() {
         at: Date.now(),
         played: false,
       };
+      if (remote) {
+        // Show it immediately, then let the server's answer be the truth.
+        rows = [...rows, row].slice(-MAX_LEN);
+        announce();
+        call('/api/queue', { method: 'POST', body: JSON.stringify({ name: cleanName, song: cleanSong, link: row.link }) });
+        return row;
+      }
       rows = [...rows, row].slice(-MAX_LEN);
       persist();
       return row;
@@ -87,14 +171,17 @@ export function createQueueStore() {
     markPlayed(id) {
       rows = rows.map((row) => (row.id === id ? { ...row, played: true } : row));
       persist();
+      if (remote) call(`/api/queue/${encodeURIComponent(id)}/played`, { method: 'POST' });
     },
     remove(id) {
       rows = rows.filter((row) => row.id !== id);
       persist();
+      if (remote) call(`/api/queue/${encodeURIComponent(id)}`, { method: 'DELETE' });
     },
     clearPlayed() {
       rows = rows.filter((row) => !row.played);
       persist();
+      if (remote) call('/api/queue/clear', { method: 'POST' });
     },
   };
 }
