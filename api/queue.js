@@ -100,12 +100,14 @@ module.exports = async (request, response) => {
       if (!raw) return response.status(404).json({ error: 'no such row' });
       const row = { ...JSON.parse(raw), played: true };
       await redis('HSET', KEY, row.id, JSON.stringify(row));
-      return response.status(200).json({ rows: await readRows() });
+      const rows = (await readRows()).map((r) => (r.id === row.id ? row : r));
+      return response.status(200).json({ rows });
     }
 
     if (request.method === 'DELETE') {
       await redis('HDEL', KEY, String(id));
-      return response.status(200).json({ rows: await readRows() });
+      const rows = (await readRows()).filter((r) => r.id !== String(id));
+      return response.status(200).json({ rows });
     }
 
     if (request.method === 'POST') {
@@ -128,12 +130,20 @@ module.exports = async (request, response) => {
       };
       await redis('HSET', KEY, row.id, JSON.stringify(row));
 
-      // A night that runs long should not grow without limit.
+      // The store is replicated and a read straight after a write can still be
+      // missing it: measured returning an empty list one millisecond after a row
+      // was accepted and stored. Merging rather than trusting the read means the
+      // guest never sees their own request disappear as they submit it.
       const rows = await readRows();
+      if (!rows.some((r) => r.id === row.id)) rows.push(row);
+      rows.sort((a, b) => (a.at || 0) - (b.at || 0));
+
+      // A night that runs long should not grow without limit.
       if (rows.length > MAX_ROWS) {
-        await redis('HDEL', KEY, ...rows.slice(0, rows.length - MAX_ROWS).map((r) => r.id));
+        const drop = rows.splice(0, rows.length - MAX_ROWS);
+        await redis('HDEL', KEY, ...drop.map((r) => r.id));
       }
-      return response.status(200).json({ row, rows: await readRows() });
+      return response.status(200).json({ row, rows });
     }
 
     return response.status(405).json({ error: 'method not allowed' });
