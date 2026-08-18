@@ -5,15 +5,23 @@
 // is separate from the rendering so the DJ route can read the count too.
 
 const KEY = 'ao.disco.queue.v1';
-const REMOTE_KEY = 'ao.disco.queue.url';
+// Bumped when the queue moved off the laptop: a browser that had used the site
+// before still had a dead tunnel address saved, and a saved value wins over the
+// default, so every returning device would have kept writing into nothing.
+const REMOTE_KEY = 'ao.disco.queue.url.v2';
 const MAX_LEN = 60;
 
-// The shared queue server the printed QR code points at. Baked in so that a
-// bare /request.html still reaches the booth: a guest who typed the address
-// instead of scanning gets the same list as everyone else. Cloudflare quick
-// tunnels hand out a new address each time cloudflared restarts, so this is the
-// one line to change when that happens.
-export const DEFAULT_QUEUE_SERVER = 'https://vsnet-gba-movers-entity.trycloudflare.com';
+/**
+ * Where the shared queue lives by default: this site. The queue used to run on
+ * the DJ's laptop behind a quick tunnel, which handed out a new address on every
+ * restart and quietly broke any QR code already printed. Same origin means the
+ * link on the poster is the site's own address and keeps working.
+ *
+ * Empty when the page is opened from a file, which has no origin to speak of;
+ * that falls back to this browser's localStorage.
+ */
+export const DEFAULT_QUEUE_SERVER =
+  typeof location !== 'undefined' && /^https?:$/.test(location.protocol) ? location.origin : '';
 
 /**
  * Where the shared queue lives, if there is one. Without it the queue is this
@@ -83,24 +91,29 @@ function safeParse(raw) {
  * @param {number} [options.pollSeconds=2.5] how often to re-read it
  */
 export function createQueueStore(options = {}) {
-  const remote = String(options.remote || '').replace(/\/+$/, '');
-  let rows = remote ? [] : safeParse(localStorage.getItem(KEY));
+  let remote = String(options.remote || '').replace(/\/+$/, '');
+  // Start from whatever this device last saw even when a shared queue is
+  // configured. If the server is unreachable the screen shows the last known
+  // list instead of an empty one, and a booth that has been running all night
+  // does not lose the room's requests to one failed request.
+  let rows = safeParse(localStorage.getItem(KEY));
   const listeners = new Set();
   let counter = 0;
   let reachable = !remote;
   let lastError = '';
+  let failures = 0;
 
   function announce() {
     for (const cb of listeners) cb(rows);
   }
 
   function persist() {
-    if (!remote) {
-      try {
-        localStorage.setItem(KEY, JSON.stringify(rows));
-      } catch (error) {
-        console.warn('[ao-queue] could not persist the queue', error);
-      }
+    // Cached whether shared or not: this is the copy that survives a reload
+    // while the server is down.
+    try {
+      localStorage.setItem(KEY, JSON.stringify(rows));
+    } catch (error) {
+      console.warn('[ao-queue] could not persist the queue', error);
     }
     announce();
   }
@@ -116,6 +129,7 @@ export function createQueueStore(options = {}) {
       });
       if (!response.ok) throw new Error(`server answered ${response.status}`);
       const body = await response.json();
+      failures = 0;
       if (Array.isArray(body.rows)) {
         const next = safeParse(JSON.stringify(body.rows));
         const changed = JSON.stringify(next) !== JSON.stringify(rows);
@@ -128,6 +142,14 @@ export function createQueueStore(options = {}) {
     } catch (error) {
       reachable = false;
       lastError = error.message;
+      // A queue server that is not there is worse than no queue server: every
+      // request typed into it disappears. Fall back to this device's own list
+      // so the night continues, and say so through isReachable.
+      failures += 1;
+      if (failures >= 3 && remote) {
+        console.warn(`[ao-queue] ${remote} is not answering (${lastError}); using this device only`);
+        remote = '';
+      }
     }
   }
 

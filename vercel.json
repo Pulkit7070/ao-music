@@ -47,5 +47,19 @@
         }
       ]
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/queue/clear",
+      "destination": "/api/queue?action=clear"
+    },
+    {
+      "source": "/api/queue/:id/played",
+      "destination": "/api/queue?action=played&id=:id"
+    },
+    {
+      "source": "/api/queue/:id",
+      "destination": "/api/queue?id=:id"
+    }
   ]
 }
