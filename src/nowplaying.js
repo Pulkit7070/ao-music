@@ -61,6 +61,12 @@ export const CONFIG = {
 
 /** The address that can actually be reached from where this page is served. */
 export function defaultUrl() {
+  // Served by tools/desktop-music.mjs, which answers /api/status itself. Same
+  // origin, so there is nothing to configure and nothing to be blocked.
+  const host = location.hostname;
+  if (location.protocol === 'http:' && (host === '127.0.0.1' || host === 'localhost')) {
+    return `${location.origin}/api/status`;
+  }
   return location.protocol === 'https:' ? CONFIG.public : CONFIG.lan;
 }
 
@@ -84,6 +90,13 @@ export function resolveUrl(fallback = defaultUrl()) {
   return fallback;
 }
 
+/**
+ * An https page cannot fetch a plain http address, and loopback is no
+ * exception: the specification calls 127.0.0.1 potentially trustworthy, but
+ * Chrome blocks the fetch anyway, which was measured rather than assumed. The
+ * way round it is to serve the page from the helper itself, same origin, which
+ * is what tools/desktop-music.mjs does.
+ */
 function blockedHere(url) {
   return location.protocol === 'https:' && /^http:\/\//i.test(url);
 }
@@ -142,6 +155,9 @@ export function normalise(body) {
   }
 
   return {
+    // Whatever is answering: djay-monitor says nothing, a desktop helper names
+    // the app it read. Used to credit the right thing on screen.
+    source: typeof body.source === 'string' && body.source ? body.source : 'djay Pro',
     running: Boolean(body.djayRunning),
     playingDeck: body.playingDeck ?? null,
     current,
@@ -194,7 +210,7 @@ export function createNowPlaying(config = {}) {
    * failure otherwise looks like the API being down.
    */
   function blockedByMixedContent(url) {
-    return location.protocol === 'https:' && /^http:\/\//i.test(url);
+    return blockedHere(url);
   }
 
   /**

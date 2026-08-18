@@ -106,7 +106,7 @@ function describeDriver() {
 /** Whatever is playing, whichever source says so. */
 function feedTrack() {
   if (spotifyState && spotifyState.current) return { ...spotifyState.current, from: 'Spotify' };
-  if (booth && booth.current) return { ...booth.current, from: 'djay Pro' };
+  if (booth && booth.current) return { ...booth.current, from: booth.source || 'djay Pro' };
   const state = deck.getState();
   if (state.source === 'file' && state.playing && localTrack) {
     return { title: localTrack, artist: '', from: 'this device' };
@@ -388,7 +388,10 @@ deck.subscribe((live) => {
     readBpm.textContent = `${f.bpm.toFixed(0)} BPM`;
     readBeats.textContent = String(beats);
     readPulse.textContent = state.music.toFixed(2);
-    const suffix = drivenByBooth ? ` (to djay at ${assumedTempo()} BPM, not listening)` : '';
+    const fed = feedTrack();
+    const suffix = drivenByBooth
+      ? ` (to ${fed ? fed.from : 'the feed'} at ${assumedTempo()} BPM, not listening)`
+      : '';
     readState.textContent = label + suffix;
     partyState.textContent = label + suffix;
     describeDriver();
