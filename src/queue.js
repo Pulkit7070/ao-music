@@ -8,13 +8,20 @@ const KEY = 'ao.disco.queue.v1';
 const REMOTE_KEY = 'ao.disco.queue.url';
 const MAX_LEN = 60;
 
+// The shared queue server the printed QR code points at. Baked in so that a
+// bare /request.html still reaches the booth: a guest who typed the address
+// instead of scanning gets the same list as everyone else. Cloudflare quick
+// tunnels hand out a new address each time cloudflared restarts, so this is the
+// one line to change when that happens.
+export const DEFAULT_QUEUE_SERVER = 'https://vsnet-gba-movers-entity.trycloudflare.com';
+
 /**
  * Where the shared queue lives, if there is one. Without it the queue is this
  * browser's localStorage, which is per device: fine for one screen being typed
  * at, useless for a room of phones scanning a QR code. Set with ?queue=... in
  * the address, and remembered after that.
  */
-export function resolveQueueUrl(fallback = '') {
+export function resolveQueueUrl(fallback = DEFAULT_QUEUE_SERVER) {
   try {
     const fromQuery = new URLSearchParams(location.search).get('queue');
     if (fromQuery !== null) {

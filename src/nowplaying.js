@@ -48,7 +48,7 @@ export const CONFIG = {
   //           starts, so if that happens, paste the new one into the field on
   //           the party page or open the site with ?booth=<address>.
   lan: 'http://192.168.88.14:7474/api/status',
-  public: 'https://logged-deal-shipping-brunswick.trycloudflare.com/api/status',
+  public: '',
 
   // Anything the endpoint needs. Do not put a real secret here: this page is
   // readable by anyone who opens the tab.

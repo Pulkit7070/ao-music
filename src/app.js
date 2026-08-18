@@ -26,11 +26,7 @@ const spotify = createSpotify({ clientId: SPOTIFY_CLIENT_ID });
 let spotifyState = null;
 let booth = null;
 
-// The shared queue server, so every phone that scans the QR code writes to the
-// same list the booth reads. Overridden by ?queue=... which is what the QR
-// carries, and which is remembered per device. Empty falls back to this
-// browser's own localStorage.
-const QUEUE_SERVER = 'https://gallery-effective-copper-simpsons.trycloudflare.com';
+
 const $ = (id) => document.getElementById(id);
 
 // -- stage --------------------------------------------------------------------
@@ -378,7 +374,7 @@ deck.subscribe((live) => {
 
 // A shared queue when one is configured, so every phone that scans the QR code
 // is writing to the same list the booth is reading.
-const store = createQueueStore({ remote: resolveQueueUrl(QUEUE_SERVER) });
+const store = createQueueStore({ remote: resolveQueueUrl() });
 const queueUI = mountQueueUI(store, {
   form: $('request-form'),
   name: $('request-name'),
