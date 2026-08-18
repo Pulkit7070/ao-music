@@ -13,7 +13,7 @@ import { createNowPlaying } from './nowplaying.js';
 import { createPulse } from './pulse.js';
 import { createSpotify } from './spotify.js';
 import { createPlaylist } from './playlist.js';
-import { search as searchLibrary } from './library.js';
+import { search as searchLibrary, trending as trendingLibrary } from './library.js';
 
 const ROUTES = ['dj', 'party'];
 // Spotify. Create an app at developer.spotify.com, put its Client ID here, and
@@ -756,16 +756,57 @@ async function playTrack(track, depth = 0) {
   renderPlaylist();
 }
 
-// When a track ends, the next one starts. That is the whole point of a deck.
-deck.getAudio().addEventListener('ended', () => {
-  const next = playlist.next();
-  if (next) playTrack(next);
-  else {
-    localTrack = '';
-    trackButton.querySelector('.source__name').textContent = 'Play a track';
-    trackButton.querySelector('.source__note').textContent = 'Playlist finished. Add more, or search.';
-    describeDriver();
+// The music keeps going. At a party, silence after the last queued track is the
+// failure, not a state to rest in, so running out of playlist tops it up from
+// the catalogue instead of stopping: more of whatever was searched for, and what
+// is popular when there was no search.
+let toppingUp = false;
+let searchPage = 0;
+let lastQuery = '';
+
+async function topUp() {
+  if (toppingUp) return false;
+  toppingUp = true;
+  try {
+    const query = lastQuery.trim();
+    let found = [];
+    if (query) {
+      searchPage += 1;
+      found = await searchLibrary(query, { limit: 10, offset: searchPage * 10 });
+    }
+    // No search, or the search is exhausted: fall back to what is popular, and
+    // stop paging so the next run does not ask for page fifty of nothing.
+    if (!found.length) {
+      searchPage = 0;
+      found = await trendingLibrary({ limit: 20 });
+    }
+    const seen = new Set(playlist.tracks().map((t) => t.id));
+    const fresh = found.filter((t) => !seen.has(t.id));
+    if (!fresh.length) return false;
+    playlist.add(fresh);
+    return true;
+  } catch (error) {
+    setNotice(`Could not find anything else to play: ${error.message}`, 'warn', 10);
+    return false;
+  } finally {
+    toppingUp = false;
   }
+}
+
+deck.getAudio().addEventListener('ended', async () => {
+  const next = playlist.next();
+  if (next) return playTrack(next);
+
+  trackButton.querySelector('.source__note').textContent = 'Finding more music...';
+  const more = (await topUp()) ? playlist.next() : null;
+  if (more) return playTrack(more);
+
+  localTrack = '';
+  localFrom = '';
+  trackButton.querySelector('.source__name').textContent = 'Play a track';
+  trackButton.querySelector('.source__note').textContent = 'Nothing else to play. Search, or add files.';
+  describeDriver();
+  renderTicker();
 });
 
 // -- searching the catalogue ---------------------------------------------------
@@ -787,6 +828,8 @@ libraryQuery.addEventListener('input', () => {
 
 async function runSearch(text) {
   const run = ++searchRun;
+  lastQuery = text;
+  searchPage = 0;
   libraryNote.hidden = false;
   libraryNote.textContent = `Searching for ${text}...`;
   try {
@@ -925,7 +968,9 @@ function renderTransport() {
 
   tPlayIcon.querySelector('path').setAttribute('d', playing ? PAUSE_PATH : PLAY_PATH);
   tPlay.title = playing ? 'Pause (space)' : 'Play (space)';
-  tPlay.disabled = playlist.isEmpty();
+  // Never disabled: with an empty deck, play means find something and start.
+  // Disabling it made the one control everybody reaches for do nothing at all.
+  tPlay.disabled = false;
   tPrev.disabled = playlist.isEmpty();
   tNext.disabled = playlist.isEmpty();
   tScrub.disabled = !onDeck || !Number.isFinite(audio.duration) || audio.duration === 0;
@@ -947,7 +992,12 @@ function renderTransport() {
 
 tPlay.addEventListener('click', async () => {
   const audio = deck.getAudio();
-  if (playlist.isEmpty()) return;
+  if (playlist.isEmpty()) {
+    // Pressing play should start music. Nothing queued means find some.
+    trackButton.querySelector('.source__note').textContent = 'Finding music...';
+    if (await topUp()) playTrack(playlist.next());
+    return;
+  }
   // Nothing chosen yet: the obvious meaning of pressing play is start at the top.
   if (!playlist.current()) return playTrack(playlist.playAt(0));
   if (deck.getState().source !== 'file') return playTrack(playlist.current());

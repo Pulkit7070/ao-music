@@ -62,6 +62,7 @@ export async function search(query, opts = {}) {
   const params = new URLSearchParams({
     query: text,
     limit: String(opts.limit || 12),
+    offset: String(opts.offset || 0),
     app_name: APP,
   });
   const response = await fetch(`${HOST}/v1/tracks/search?${params}`, {
@@ -82,4 +83,32 @@ export async function search(query, opts = {}) {
     .filter((track) => raw_streamable(track, byId.get(track.id)));
 }
 
-export default { search };
+/**
+ * What is popular right now. Used to keep the music going once a playlist runs
+ * out: at a party, silence at the end of the last queued track is the failure,
+ * not a state to sit in.
+ *
+ * @param {{ limit?: number, signal?: AbortSignal }} [opts]
+ * @returns {Promise<Array<object>>}
+ */
+export async function trending(opts = {}) {
+  const params = new URLSearchParams({
+    limit: String(opts.limit || 20),
+    app_name: APP,
+  });
+  const response = await fetch(`${HOST}/v1/tracks/trending?${params}`, {
+    signal: opts.signal,
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error(`trending failed: ${response.status}`);
+  const body = await response.json();
+  const rows = Array.isArray(body.data) ? body.data : [];
+  const byId = new Map(rows.map((row) => [String(row.id), row]));
+  return rows
+    .map(shape)
+    .filter(Boolean)
+    .filter((track) => track.duration >= 30 && track.duration <= 900)
+    .filter((track) => raw_streamable(track, byId.get(track.id)));
+}
+
+export default { search, trending };
