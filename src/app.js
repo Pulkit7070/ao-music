@@ -12,6 +12,8 @@ import { createQueueStore, mountQueueUI, resolveQueueUrl } from './queue.js';
 import { createNowPlaying } from './nowplaying.js';
 import { createPulse } from './pulse.js';
 import { createSpotify } from './spotify.js';
+import { createPlaylist } from './playlist.js';
+import { search as searchLibrary } from './library.js';
 
 const ROUTES = ['dj', 'party'];
 // Spotify. Create an app at developer.spotify.com, put its Client ID here, and
@@ -353,7 +355,13 @@ deck.subscribe((live) => {
   // wins whenever it is actually hearing something, because that is the only
   // one of the three that knows where the beat is.
   const feedPlaying = Boolean(feedTrack());
-  drivenByBooth = feedPlaying && !hearingSomething;
+  // The generated pulse exists for a feed that reports a title but carries no
+  // audio. A track playing in this page carries its own, straight to the
+  // analyser, so guessing a tempo over the top of it would be strictly worse
+  // than reading it.
+  const deckState = deck.getState();
+  const playingHere = deckState.source === 'file' && deckState.playing;
+  drivenByBooth = feedPlaying && !hearingSomething && !playingHere;
   if (hearingSomething && live.bpm) heardBpm = live.bpm;
   const f = drivenByBooth ? pulse.tick(dt, assumedTempo()) : live;
 
@@ -590,37 +598,222 @@ $('booth-check').addEventListener('click', async () => {
 const trackButton = $('track-open');
 const trackFile = $('track-file');
 
-trackButton.addEventListener('click', () => {
-  // Choosing a source answers whatever the last notice was about.
+const deckPanel = $('deck-panel');
+const playlist = createPlaylist();
+const playlistList = $('playlist');
+const libraryQuery = $('library-query');
+const libraryResults = $('library-results');
+const libraryNote = $('library-note');
+
+/** Open the deck and reveal it the first time a source is chosen. */
+function openDeck() {
   noticeUntil = 0;
-  trackFile.click();
+  deckPanel.hidden = false;
+  trackButton.dataset.state = 'on';
+}
+
+trackButton.addEventListener('click', () => {
+  openDeck();
+  if (playlist.isEmpty()) trackFile.click();
+  else libraryQuery.focus();
 });
 
-trackFile.addEventListener('change', async () => {
-  const file = trackFile.files && trackFile.files[0];
-  if (!file) return;
-  // A filename is a poor title but an honest one: strip the extension and the
-  // track-number prefix that ripped files carry.
-  localTrack = file.name.replace(/\.[^.]+$/, '').replace(/^\d+[\s._-]+/, '').trim() || file.name;
-  trackButton.dataset.state = 'on';
-  trackButton.querySelector('.source__note').textContent = 'Loading...';
-  try {
-    await deck.setSource('file', file);
-    await deck.play();
-    trackButton.querySelector('.source__name').textContent = 'Playing';
-    trackButton.querySelector('.source__note').textContent = localTrack;
-  } catch (error) {
-    localTrack = '';
-    trackButton.dataset.state = 'off';
-    trackButton.querySelector('.source__note').textContent = 'That file would not play. Try another.';
-    setNotice(`Could not play that file: ${error && error.message ? error.message : error}`, 'error');
+$('deck-add').addEventListener('click', () => trackFile.click());
+
+trackFile.addEventListener('change', () => {
+  const added = playlist.addFiles(trackFile.files);
+  // Clear it, or picking the same file twice in a row fires no change event.
+  trackFile.value = '';
+  if (!added.length) {
+    setNotice('Those did not look like audio files.', 'warn', 8);
     return;
   }
+  openDeck();
+  if (!playlist.current()) playTrack(playlist.playAt(playlist.tracks().length - added.length));
+});
+
+// Some catalogue tracks answer with application/octet-stream and nosniff, which
+// a media element refuses to treat as audio. Fetching them and relabelling the
+// bytes fixes it. Only used when the direct attempt fails, since it has to have
+// the whole file before anything is heard.
+let rescuedUrl = '';
+
+async function rescue(url) {
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`stream ${response.status}`);
+  const bytes = await response.arrayBuffer();
+  if (rescuedUrl) URL.revokeObjectURL(rescuedUrl);
+  rescuedUrl = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
+  return rescuedUrl;
+}
+
+/** Put a track on. Local file or catalogue URL, same path from here down. */
+async function playTrack(track, depth = 0) {
+  if (!track) return;
+  localTrack = track.artist ? `${track.title} - ${track.artist}` : track.title;
+  try {
+    await deck.setSource('file', track.url);
+    // A playlist that loops one track never reaches the next one.
+    deck.getAudio().loop = false;
+    await deck.play();
+    // setSource swallows its own play failure, so ask the element directly
+    // rather than trusting that no exception means it is playing.
+    if (deck.getAudio().error) throw new Error(deck.getAudio().error.message || 'unsupported');
+  } catch (error) {
+    if (track.local) {
+      setNotice(`Could not play ${track.title}: ${error && error.message ? error.message : error}`, 'error');
+      localTrack = '';
+      return;
+    }
+    try {
+      trackButton.querySelector('.source__note').textContent = `Loading ${track.title}...`;
+      await deck.setSource('file', await rescue(track.url));
+      deck.getAudio().loop = false;
+      await deck.play();
+    } catch (second) {
+      // Catalogue tracks are served by a network of independent storage nodes
+      // and some of them will not answer a browser, whatever the metadata says:
+      // one measured serving 14 MB to curl with a permissive CORS header while
+      // the same request from a page failed. Nothing here can fix that node, so
+      // the track is marked and the next one starts. A dead link must never be
+      // able to stop the music.
+      track.unavailable = true;
+      renderPlaylist();
+      const skipTo = playlist.next();
+      if (skipTo && depth < 4) {
+        setNotice(`${track.title} would not load. Skipping to ${skipTo.title}.`, 'warn', 8);
+        return playTrack(skipTo, depth + 1);
+      }
+      setNotice(
+        `Could not play ${track.title}: ${second && second.message ? second.message : second}`,
+        'error',
+      );
+      localTrack = '';
+      return;
+    }
+  }
+  trackButton.querySelector('.source__name').textContent = 'Playing';
+  trackButton.querySelector('.source__note').textContent = localTrack;
   advanceQueue(feedTrack());
   queueUI.setLive(feedTrack(), true);
   describeDriver();
   renderTicker();
+  renderPlaylist();
+}
+
+// When a track ends, the next one starts. That is the whole point of a deck.
+deck.getAudio().addEventListener('ended', () => {
+  const next = playlist.next();
+  if (next) playTrack(next);
+  else {
+    localTrack = '';
+    trackButton.querySelector('.source__name').textContent = 'Play a track';
+    trackButton.querySelector('.source__note').textContent = 'Playlist finished. Add more, or search.';
+    describeDriver();
+  }
 });
+
+// -- searching the catalogue ---------------------------------------------------
+
+let searchRun = 0;
+let searchTimer = 0;
+
+libraryQuery.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const text = libraryQuery.value.trim();
+  if (!text) {
+    libraryResults.hidden = true;
+    libraryNote.hidden = true;
+    return;
+  }
+  // Typing is faster than the network: only the last query matters.
+  searchTimer = setTimeout(() => runSearch(text), 300);
+});
+
+async function runSearch(text) {
+  const run = ++searchRun;
+  libraryNote.hidden = false;
+  libraryNote.textContent = `Searching for ${text}...`;
+  try {
+    const found = await searchLibrary(text, { limit: 12 });
+    if (run !== searchRun) return;
+    renderResults(found, text);
+  } catch (error) {
+    if (run !== searchRun) return;
+    libraryResults.hidden = true;
+    libraryNote.textContent = `Could not reach the catalogue: ${
+      error && error.message ? error.message : error
+    }. Your own files still work.`;
+  }
+}
+
+function renderResults(found, text) {
+  libraryResults.textContent = '';
+  if (!found.length) {
+    libraryResults.hidden = true;
+    libraryNote.textContent = `Nothing for "${text}" in the open catalogue. Add the file instead.`;
+    return;
+  }
+  libraryNote.hidden = true;
+  libraryResults.hidden = false;
+  for (const track of found) {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    name.className = 'results__name';
+    name.textContent = track.artist ? `${track.title} - ${track.artist}` : track.title;
+    const len = document.createElement('span');
+    len.className = 'results__len';
+    len.textContent = track.length;
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'results__add';
+    add.textContent = playlist.isEmpty() ? 'Play' : 'Queue';
+    add.addEventListener('click', () => {
+      const [row] = playlist.add(track);
+      if (!playlist.current()) playTrack(playlist.playAt(playlist.tracks().indexOf(row)));
+    });
+    li.append(name, len, add);
+    libraryResults.appendChild(li);
+  }
+}
+
+// -- the playlist --------------------------------------------------------------
+
+function renderPlaylist() {
+  const rows = playlist.tracks();
+  const playing = playlist.current();
+  playlistList.textContent = '';
+  if (!rows.length) {
+    const li = document.createElement('li');
+    li.className = 'playlist__empty';
+    li.textContent = 'Nothing on the deck. Add files, or search above.';
+    playlistList.appendChild(li);
+    return;
+  }
+  rows.forEach((track, i) => {
+    const li = document.createElement('li');
+    if (playing && track.id === playing.id) li.dataset.playing = 'yes';
+    if (track.unavailable) li.dataset.dead = 'yes';
+    const name = document.createElement('button');
+    name.type = 'button';
+    name.className = 'playlist__name';
+    name.textContent = track.artist ? `${track.title} - ${track.artist}` : track.title;
+    name.addEventListener('click', () => playTrack(playlist.playAt(i)));
+    const where = document.createElement('span');
+    where.className = 'playlist__from';
+    where.textContent = track.unavailable ? 'would not load' : track.from;
+    const drop = document.createElement('button');
+    drop.type = 'button';
+    drop.className = 'playlist__drop';
+    drop.textContent = 'Remove';
+    drop.addEventListener('click', () => playlist.remove(track.id));
+    li.append(name, where, drop);
+    playlistList.appendChild(li);
+  });
+}
+
+playlist.subscribe(renderPlaylist);
+renderPlaylist();
 
 // -- spotify ------------------------------------------------------------------
 

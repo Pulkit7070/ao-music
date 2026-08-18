@@ -577,6 +577,14 @@ export function createConsole(container, opts = {}) {
       return features;
     },
 
+    /**
+     * The media element itself, so a playlist can hear "ended" and turn looping
+     * off. Deliberately narrow in intent: everything else about transport has a
+     * method above, and reaching in here to seek or set a source would bypass
+     * the detector reset that setSource does.
+     */
+    getAudio: () => audio,
+
     /** Transport and routing state. */
     getState() {
       return {

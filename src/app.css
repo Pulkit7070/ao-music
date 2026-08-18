@@ -905,3 +905,178 @@ footer {
 code {
   color: var(--accent-soft);
 }
+
+/* -- the deck ---------------------------------------------------------------
+   Files and catalogue results in one list. Dense on purpose: this is the DJ's
+   working surface, read at arm's length in a dark room, not a landing page. */
+
+.deck {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  padding: 14px;
+}
+
+.deck__search {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.deck__search input {
+  font: inherit;
+  /* 16px or larger, or iOS zooms the page the moment a field is focused. */
+  font-size: 16px;
+  color: var(--text);
+  background: #05080c;
+  border: 1px solid var(--border);
+  padding: 11px 12px;
+  width: 100%;
+}
+
+.deck__search input:focus-visible,
+.deck__add:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.deck__add {
+  appearance: none;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text);
+  background: none;
+  border: 1px solid var(--border);
+  padding: 0 16px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.deck__add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.deck__note {
+  font-size: 11px;
+  color: var(--dim);
+  margin: 10px 0 0;
+}
+
+.results,
+.playlist {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.results {
+  max-height: 260px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.results li,
+.playlist li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  background: #05080c;
+  border: 1px solid transparent;
+  font-size: 13px;
+}
+
+.results li:hover,
+.playlist li:hover {
+  border-color: var(--border);
+}
+
+.results__name,
+.playlist__name {
+  overflow-wrap: anywhere;
+}
+
+.playlist__name {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.playlist__name:hover {
+  color: var(--accent);
+}
+
+.results__len,
+.playlist__from {
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.results__add,
+.playlist__drop {
+  appearance: none;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--dim);
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.results__add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.playlist__drop:hover {
+  border-color: var(--hot);
+  color: var(--hot);
+}
+
+/* The one that is on. */
+.playlist li[data-playing='yes'] {
+  border-color: var(--accent);
+}
+
+.playlist li[data-playing='yes'] .playlist__name {
+  color: var(--accent);
+}
+
+.playlist li[data-playing='yes'] .playlist__name::before {
+  content: '> ';
+}
+
+.playlist__empty {
+  display: block;
+  font-size: 12px;
+  color: var(--dim);
+  background: none;
+}
+
+/* A catalogue node that will not answer a browser. Kept visible rather than
+   silently dropped, so the DJ can see why it was passed over. */
+.playlist li[data-dead='yes'] .playlist__name {
+  color: var(--dim);
+  text-decoration: line-through;
+}
+
+.playlist li[data-dead='yes'] .playlist__from {
+  color: var(--hot);
+}

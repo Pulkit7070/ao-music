@@ -78,7 +78,29 @@
           <button type="button" class="linkish" id="spotify-connect">Connect Spotify instead</button>
         </p>
 
-        <input type="file" id="track-file" accept="audio/*" hidden />
+        <input type="file" id="track-file" accept="audio/*" multiple hidden />
+
+        <!--
+          The deck. Files off this machine and tracks from an open catalogue sit
+          in one list, because once they are playing there is no difference: both
+          reach the analyser, so both give a real beat.
+        -->
+        <section class="deck" id="deck-panel" hidden>
+          <div class="deck__search">
+            <input
+              type="search"
+              id="library-query"
+              placeholder="Search for a song"
+              autocomplete="off"
+              aria-label="Search the catalogue"
+            />
+            <button type="button" class="deck__add" id="deck-add">Add files</button>
+          </div>
+          <p class="deck__note" id="library-note" hidden></p>
+          <ol class="results" id="library-results" hidden></ol>
+
+          <ol class="playlist" id="playlist"></ol>
+        </section>
 
         <p class="driving" id="driving">Pick one and he starts.</p>
 
