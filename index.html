@@ -62,12 +62,23 @@
             <span class="source__name">Microphone</span>
             <span class="source__note">He hears the room and moves to the real beat</span>
           </button>
-          <button type="button" class="source source--spotify" id="spotify-connect">
-            <span class="source__mark" aria-hidden="true">&#9835;</span>
-            <span class="source__name">Spotify</span>
-            <span class="source__note">Reads what you are playing. No microphone needed</span>
+          <button type="button" class="source source--track" id="track-open">
+            <span class="source__mark" aria-hidden="true">&#9654;</span>
+            <span class="source__name">Play a track</span>
+            <span class="source__note">Pick a song off this device. The cleanest beat there is</span>
           </button>
         </div>
+
+        <!--
+          Off the surface, not gone. Spotify names the song but cannot give the
+          beat, and its hosts are blocked on some networks, so it does not
+          deserve one of the two doors a first-time user sees.
+        -->
+        <p class="sources__aside">
+          <button type="button" class="linkish" id="spotify-connect">Connect Spotify instead</button>
+        </p>
+
+        <input type="file" id="track-file" accept="audio/*" hidden />
 
         <p class="driving" id="driving">Pick one and he starts.</p>
 

@@ -340,6 +340,35 @@ h2 {
   border-color: var(--accent);
 }
 
+.source--track[data-state='on'] .source__mark {
+  color: var(--accent);
+}
+
+/* Spotify is still here, one line under the two doors, not beside them. */
+.sources__aside {
+  margin: 12px 0 0;
+  text-align: right;
+}
+
+.linkish {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  border-bottom: 1px solid transparent;
+  cursor: pointer;
+}
+
+.linkish:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
 .source--spotify[data-state='on'] .source__name::after {
   content: ' connected';
   color: var(--accent);

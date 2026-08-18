@@ -50,6 +50,8 @@ const deck = createConsole($('deck'), {
   autoplay: false,
 });
 
+let localTrack = '';
+
 const micButton = $('mic-enable');
 const micStatus = $('mic-status');
 const micLevel = $('mic-level');
@@ -70,7 +72,11 @@ function setDriver(text, tone) {
 function describeDriver() {
   const listening = deck.getState().source === 'mic';
   const track = feedTrack();
-  if (track && !hearing) {
+  if (track && track.from === 'this device') {
+    // Straight into the analyser, so this is the real beat of the real track:
+    // better than the microphone, which also hears the room.
+    setDriver(`Playing ${track.title}. Moving to the track itself.`, 'ok');
+  } else if (track && !hearing) {
     setDriver(`Moving to ${track.title}, from ${track.from}. Assumed tempo, nothing is being heard.`, 'ok');
   } else if (listening && hearing) {
     setDriver(track ? `Hearing the room. ${track.title} is on.` : 'Hearing the room.', 'ok');
@@ -87,6 +93,10 @@ function describeDriver() {
 function feedTrack() {
   if (spotifyState && spotifyState.current) return { ...spotifyState.current, from: 'Spotify' };
   if (booth && booth.current) return { ...booth.current, from: 'djay Pro' };
+  const state = deck.getState();
+  if (state.source === 'file' && state.playing && localTrack) {
+    return { title: localTrack, artist: '', from: 'this device' };
+  }
   return null;
 }
 
@@ -550,6 +560,44 @@ $('booth-check').addEventListener('click', async () => {
   feedStatus.textContent = `Health check: ${probe.note}`;
 });
 
+// -- a track off this device --------------------------------------------------
+//
+// The best beat available and the one with no dependencies: the file is decoded
+// in the page and fed straight to the analyser, so onsets land on the actual
+// transients rather than on whatever the microphone made of the room. No
+// permission prompt, no network, nothing to be blocked.
+
+const trackButton = $('track-open');
+const trackFile = $('track-file');
+
+trackButton.addEventListener('click', () => trackFile.click());
+
+trackFile.addEventListener('change', async () => {
+  const file = trackFile.files && trackFile.files[0];
+  if (!file) return;
+  // A filename is a poor title but an honest one: strip the extension and the
+  // track-number prefix that ripped files carry.
+  localTrack = file.name.replace(/\.[^.]+$/, '').replace(/^\d+[\s._-]+/, '').trim() || file.name;
+  trackButton.dataset.state = 'on';
+  trackButton.querySelector('.source__note').textContent = 'Loading...';
+  try {
+    await deck.setSource('file', file);
+    await deck.play();
+    trackButton.querySelector('.source__name').textContent = 'Playing';
+    trackButton.querySelector('.source__note').textContent = localTrack;
+  } catch (error) {
+    localTrack = '';
+    trackButton.dataset.state = 'off';
+    trackButton.querySelector('.source__note').textContent = 'That file would not play. Try another.';
+    setDriver(`Could not play that file: ${error && error.message ? error.message : error}`, 'error');
+    return;
+  }
+  advanceQueue(feedTrack());
+  queueUI.setLive(feedTrack(), true);
+  describeDriver();
+  renderTicker();
+});
+
 // -- spotify ------------------------------------------------------------------
 
 const spotifyButton = $('spotify-connect');
@@ -559,11 +607,13 @@ spotify.subscribe((state, status) => {
   advanceQueue(state && state.current);
   queueUI.setLive(feedTrack(), true);
   spotifyButton.dataset.state = spotify.isConnected() ? 'on' : 'off';
-  spotifyButton.querySelector('.source__note').textContent = spotify.isConnected()
+  // Spotify now sits on one line rather than in a card, so its state goes in
+  // the line itself.
+  spotifyButton.textContent = spotify.isConnected()
     ? status === 'playing' && state && state.current
-      ? `${state.current.title} - ${state.current.artist}`
-      : 'Connected. Press play in Spotify.'
-    : 'Reads what you are playing. No microphone needed';
+      ? `Spotify: ${state.current.title}`
+      : 'Spotify connected. Press play there.'
+    : 'Connect Spotify instead';
   describeDriver();
   renderTicker();
 });
