@@ -49,80 +49,77 @@
         <p class="stage-caption" id="stage-caption"></p>
       </section>
 
-      <section id="route-dj" class="panel">
-        <div class="card card--mic">
-          <h2>1. Let him hear the room</h2>
-          <p>
-            Play music out loud on the room speakers. This page listens through the microphone and
-            the mascot reacts to what it actually hears: nothing in his motion is on a timer.
-          </p>
-          <div class="buttons">
-            <button type="button" id="mic-enable" class="button">Enable microphone</button>
-            <button type="button" id="demo-loop" class="button button--ghost">
-              Test without a microphone
-            </button>
-          </div>
-          <p class="status" id="mic-status" data-tone="idle">
-            The microphone is off. Nothing is recorded or sent anywhere: audio is analysed in this
-            tab and never leaves it.
-          </p>
-          <div class="meter" role="img" aria-label="Live input level">
-            <i id="mic-level"></i>
-            <u id="mic-peak"></u>
-          </div>
-          <p class="meter-legend">live input level, with a decaying peak marker</p>
-          <p class="hint" id="mic-help">
-            If the level bar stays flat while music is playing, the page is not hearing the room:
-            check which input your browser is using.
-          </p>
+      <section id="route-dj" class="panel panel--dj">
+        <!--
+          Two ways in, and nothing else on the surface. Everything that used to
+          be here, the meters, the sliders, the monitor address, is real and
+          still works, but it belongs to whoever is tuning the thing, not to
+          somebody opening it for the first time.
+        -->
+        <div class="sources">
+          <button type="button" class="source" id="mic-enable">
+            <span class="source__mark" aria-hidden="true">))</span>
+            <span class="source__name">Microphone</span>
+            <span class="source__note">He hears the room and moves to the real beat</span>
+          </button>
+          <button type="button" class="source source--spotify" id="spotify-connect">
+            <span class="source__mark" aria-hidden="true">&#9835;</span>
+            <span class="source__name">Spotify</span>
+            <span class="source__note">Reads what you are playing. No microphone needed</span>
+          </button>
+        </div>
 
-          <div class="controls">
-            <label class="control" for="mic-gain">
-              <span>Input sensitivity <b id="mic-gain-value">12x</b></span>
-              <input id="mic-gain" type="range" min="1" max="48" step="1" value="12" />
-            </label>
-            <label class="control" for="assumed-tempo">
-              <span>Tempo to use when djay is playing but the mic hears nothing</span>
-              <input id="assumed-tempo" type="number" min="60" max="200" step="1" placeholder="120" />
-            </label>
-            <label class="control control--check" for="react-all">
-              <input id="react-all" type="checkbox" />
-              <span>React to any sound, not only to music</span>
-            </label>
-            <button type="button" class="button button--ghost" id="diagnose">
-              Diagnose for 8 seconds
-            </button>
+        <p class="driving" id="driving">Pick one and he starts.</p>
+
+        <div class="meter" role="img" aria-label="Live input level">
+          <i id="mic-level"></i>
+          <u id="mic-peak"></u>
+        </div>
+
+        <details class="tuning">
+          <summary>Tuning and diagnostics</summary>
+
+          <div class="tuning__grid">
+            <dl class="stats">
+              <div><dt>energy</dt><dd id="read-energy">0.00</dd></div>
+              <div><dt>tempo</dt><dd id="read-bpm">-- BPM</dd></div>
+              <div><dt>onsets</dt><dd id="read-beats">0</dd></div>
+              <div><dt>pulse</dt><dd id="read-pulse">0.00</dd></div>
+              <div><dt>beat</dt><dd><span class="dot" id="beat-dot"></span></dd></div>
+            </dl>
+
+            <div class="readouts">
+              <div class="readout"><span>bass</span><div class="bar"><i id="bar-bass"></i></div></div>
+              <div class="readout"><span>low mid</span><div class="bar"><i id="bar-lowMid"></i></div></div>
+              <div class="readout"><span>mid</span><div class="bar"><i id="bar-mid"></i></div></div>
+              <div class="readout"><span>high</span><div class="bar"><i id="bar-high"></i></div></div>
+            </div>
+          </div>
+
+          <p class="state-line">He is: <b id="read-state">waiting</b></p>
+
+          <label class="control" for="mic-gain">
+            <span>Input sensitivity <b id="mic-gain-value">12x</b></span>
+            <input id="mic-gain" type="range" min="1" max="48" step="1" value="12" />
+          </label>
+          <label class="control" for="assumed-tempo">
+            <span>Tempo to assume when a track is playing but nothing is heard</span>
+            <input id="assumed-tempo" type="number" min="60" max="200" step="1" placeholder="120" />
+          </label>
+          <label class="control control--check" for="react-all">
+            <input id="react-all" type="checkbox" />
+            <span>React to any sound, not only to music</span>
+          </label>
+
+          <div class="buttons">
+            <button type="button" class="button button--ghost" id="demo-loop">Test without a microphone</button>
+            <button type="button" class="button button--ghost" id="diagnose">Diagnose for 8 seconds</button>
           </div>
           <pre class="report" id="report" hidden></pre>
-        </div>
 
-        <div class="card">
-          <h2>What he is hearing</h2>
-          <div class="readouts">
-            <div class="readout"><span>bass</span><div class="bar"><i id="bar-bass"></i></div></div>
-            <div class="readout">
-              <span>low mid</span><div class="bar"><i id="bar-lowMid"></i></div>
-            </div>
-            <div class="readout"><span>mid</span><div class="bar"><i id="bar-mid"></i></div></div>
-            <div class="readout"><span>high</span><div class="bar"><i id="bar-high"></i></div></div>
-          </div>
-          <dl class="stats">
-            <div><dt>energy</dt><dd id="read-energy">0.00</dd></div>
-            <div><dt>tempo</dt><dd id="read-bpm">-- BPM</dd></div>
-            <div><dt>onsets</dt><dd id="read-beats">0</dd></div>
-            <div><dt>pulse</dt><dd id="read-pulse">0.00</dd></div>
-            <div><dt>beat</dt><dd><span class="dot" id="beat-dot"></span></dd></div>
-          </dl>
-          <p class="state-line">He is: <b id="read-state">still, waiting for sound</b></p>
-          <details class="source">
-            <summary>Audio source and transport</summary>
-            <p class="hint">
-              Same console, other inputs: the bundled loop or a dropped file, useful when there is no
-              room to listen to.
-            </p>
-            <div id="deck"></div>
-          </details>
-        </div>
+          <p class="status" id="mic-status" data-tone="idle"></p>
+          <div id="deck"></div>
+        </details>
       </section>
 
       <section id="route-party" class="panel" hidden>

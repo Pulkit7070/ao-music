@@ -11,8 +11,21 @@ import { createChoreo } from './choreo.js';
 import { createQueueStore, mountQueueUI, resolveQueueUrl } from './queue.js';
 import { createNowPlaying } from './nowplaying.js';
 import { createPulse } from './pulse.js';
+import { createSpotify } from './spotify.js';
 
 const ROUTES = ['dj', 'party'];
+// Spotify. Create an app at developer.spotify.com, put its Client ID here, and
+// register this page's address as a Redirect URI on it. No secret is involved:
+// the sign in is Authorization Code with PKCE, which is the flow meant for a
+// page with no backend.
+const SPOTIFY_CLIENT_ID = '';
+
+// Declared here rather than beside the wiring below, because the render loop
+// reads them on its first frame and a `let` is unreachable until its line runs.
+const spotify = createSpotify({ clientId: SPOTIFY_CLIENT_ID });
+let spotifyState = null;
+let booth = null;
+
 // The shared queue server, so every phone that scans the QR code writes to the
 // same list the booth reads. Overridden by ?queue=... which is what the QR
 // carries, and which is remembered per device. Empty falls back to this
@@ -51,6 +64,36 @@ function setMicStatus(text, tone) {
   micStatus.dataset.tone = tone;
 }
 
+const driving = $('driving');
+function setDriver(text, tone) {
+  driving.textContent = text;
+  driving.dataset.tone = tone || 'idle';
+}
+
+/** One line, in front of everything else, saying what is moving him and why. */
+function describeDriver() {
+  const listening = deck.getState().source === 'mic';
+  const track = feedTrack();
+  if (track && !hearing) {
+    setDriver(`Moving to ${track.title}, from ${track.from}. Assumed tempo, nothing is being heard.`, 'ok');
+  } else if (listening && hearing) {
+    setDriver(track ? `Hearing the room. ${track.title} is on.` : 'Hearing the room.', 'ok');
+  } else if (listening) {
+    setDriver('Microphone on, waiting for something to hear.', 'idle');
+  } else if (spotify.isConnected()) {
+    setDriver('Spotify connected. Press play, or turn the microphone on for the real beat.', 'idle');
+  } else {
+    setDriver('Pick one and he starts.', 'idle');
+  }
+}
+
+/** Whatever is playing, whichever source says so. */
+function feedTrack() {
+  if (spotifyState && spotifyState.current) return { ...spotifyState.current, from: 'Spotify' };
+  if (booth && booth.current) return { ...booth.current, from: 'djay Pro' };
+  return null;
+}
+
 async function enableMic() {
   micButton.disabled = true;
   setMicStatus('Asking the browser for the microphone...', 'wait');
@@ -73,6 +116,7 @@ async function enableMic() {
 }
 
 micButton.addEventListener('click', enableMic);
+
 
 // A microphone-free way to tell a broken page from a broken input: this plays
 // the bundled loop out of the speakers and feeds the same analysis chain. If he
@@ -264,6 +308,7 @@ function stateLabel(s) {
 const pulse = createPulse();
 const tempoInput = $('assumed-tempo');
 let heardBpm = 0;
+let hearing = false;
 let drivenByBooth = false;
 
 function assumedTempo() {
@@ -282,8 +327,12 @@ deck.subscribe((live) => {
   clock += dt;
 
   const hearingSomething = live.rms > 0.006;
-  const boothPlaying = Boolean(booth && booth.current);
-  drivenByBooth = boothPlaying && !hearingSomething;
+  hearing = hearingSomething;
+  // Either source saying a track is on is enough to move him; the microphone
+  // wins whenever it is actually hearing something, because that is the only
+  // one of the three that knows where the beat is.
+  const feedPlaying = Boolean(feedTrack());
+  drivenByBooth = feedPlaying && !hearingSomething;
   if (hearingSomething && live.bpm) heardBpm = live.bpm;
   const f = drivenByBooth ? pulse.tick(dt, assumedTempo()) : live;
 
@@ -321,6 +370,7 @@ deck.subscribe((live) => {
     const suffix = drivenByBooth ? ` (to djay at ${assumedTempo()} BPM, not listening)` : '';
     readState.textContent = label + suffix;
     partyState.textContent = label + suffix;
+    describeDriver();
   }
 });
 
@@ -348,7 +398,6 @@ const nowPlaying = createNowPlaying();
 const feedStatus = $('feed-status');
 const boothForm = $('booth-form');
 const boothUrlInput = $('booth-url');
-let booth = null;
 
 
 // The stage ticker: what is on and what is coming, readable from the floor on
@@ -364,7 +413,7 @@ function renderTicker() {
   queueBadge.hidden = waiting === 0;
 
   const queued = pending[0];
-  const live = booth && booth.current;
+  const live = feedTrack();
   nextButton.disabled = !queued;
 
   // While the monitor is answering, it is the only thing that says what is
@@ -372,7 +421,7 @@ function renderTicker() {
   // was asked for, not something that is on, and showing one as now playing is
   // what made the two panels disagree. The queue only stands in when there is
   // no monitor to ask.
-  const onAir = nowPlaying.isReachable();
+  const onAir = nowPlaying.isReachable() || spotify.isConnected();
   const current = live
     ? { song: live.title, name: [live.artist, live.remaining].filter(Boolean).join('  '), fromApi: true }
     : onAir
@@ -390,7 +439,7 @@ function renderTicker() {
     stageNow.appendChild(by);
   } else if (onAir) {
     const by = document.createElement('small');
-    by.textContent = booth && booth.running ? 'djay is running, nothing on the decks' : 'djay is not running';
+    by.textContent = spotify.isConnected() ? 'nothing playing on Spotify' : 'nothing on the decks';
     stageNow.appendChild(by);
   }
 
@@ -462,8 +511,8 @@ function advanceQueue(next) {
 
 nowPlaying.subscribe((state, status) => {
   booth = state;
-  advanceQueue(state && state.current);
-  queueUI.setLive(state && state.current, nowPlaying.isReachable());
+  advanceQueue(feedTrack());
+  queueUI.setLive(feedTrack(), nowPlaying.isReachable() || spotify.isConnected());
   const on = Boolean(state && state.current);
   feedStatus.dataset.live = on ? 'yes' : 'no';
   // Say what djay is doing in its own words, and only mention the queue
@@ -504,6 +553,43 @@ $('booth-check').addEventListener('click', async () => {
   feedStatus.dataset.live = probe.ok && probe.djayRunning ? 'yes' : 'no';
   feedStatus.textContent = `Health check: ${probe.note}`;
 });
+
+// -- spotify ------------------------------------------------------------------
+
+const spotifyButton = $('spotify-connect');
+
+spotify.subscribe((state, status) => {
+  spotifyState = state;
+  advanceQueue(state && state.current);
+  queueUI.setLive(feedTrack(), true);
+  spotifyButton.dataset.state = spotify.isConnected() ? 'on' : 'off';
+  spotifyButton.querySelector('.source__note').textContent = spotify.isConnected()
+    ? status === 'playing' && state && state.current
+      ? `${state.current.title} - ${state.current.artist}`
+      : 'Connected. Press play in Spotify.'
+    : 'Reads what you are playing. No microphone needed';
+  describeDriver();
+  renderTicker();
+});
+
+spotifyButton.addEventListener('click', () => {
+  if (!spotify.isConfigured()) {
+    setDriver(
+      'Spotify needs a Client ID first: make an app at developer.spotify.com, ' +
+        `add ${location.origin + location.pathname} as a Redirect URI, and put the Client ID in src/app.js.`,
+      'warn',
+    );
+    return;
+  }
+  if (spotify.isConnected()) {
+    spotify.disconnect();
+    return;
+  }
+  spotify.connect();
+});
+
+// Spotify sends the user back here with a code in the address.
+spotify.completeSignIn();
 
 store.subscribe(renderTicker);
 

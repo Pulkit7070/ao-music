@@ -267,6 +267,148 @@ h2 {
   font-size: 11px;
 }
 
+/* -- the two ways in ------------------------------------------------------- */
+/* Two targets, side by side, that look like the only decision on the page,
+   because they are. Everything else moved behind a summary. */
+
+/* .panel below is a two column grid and comes later in the file, so this needs
+   the extra class to win. */
+.panel.panel--dj {
+  display: block;
+}
+
+.sources {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 620px) {
+  .sources {
+    grid-template-columns: 1fr;
+  }
+}
+
+.source {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: 'mark name' 'mark note';
+  column-gap: 16px;
+  align-items: center;
+  text-align: left;
+  padding: 20px 22px;
+  font: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.source:hover {
+  border-color: var(--accent);
+  background: var(--panel-2);
+}
+
+.source__mark {
+  grid-area: mark;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--dim);
+}
+
+.source__name {
+  grid-area: name;
+  font-size: 17px;
+  letter-spacing: 0.02em;
+}
+
+.source__note {
+  grid-area: note;
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+
+.source:hover .source__mark,
+.source[data-state='on'] .source__mark {
+  color: var(--accent);
+}
+
+.source[data-state='on'] {
+  border-color: var(--accent);
+}
+
+.source--spotify[data-state='on'] .source__name::after {
+  content: ' connected';
+  color: var(--accent);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.driving {
+  margin: 14px 0 10px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.driving[data-tone='ok'] {
+  color: var(--accent);
+}
+
+.driving[data-tone='warn'] {
+  color: var(--warn);
+}
+
+/* -- tuning, folded away --------------------------------------------------- */
+
+.tuning {
+  margin-top: 22px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.tuning > summary {
+  cursor: pointer;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--dim);
+  list-style: none;
+}
+
+.tuning > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tuning > summary::before {
+  content: '+ ';
+  color: var(--accent);
+}
+
+.tuning[open] > summary::before {
+  content: '- ';
+}
+
+.tuning > *:not(summary) {
+  margin-top: 14px;
+}
+
+.tuning__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 620px) {
+  .tuning__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* -- panels ---------------------------------------------------------------- */
 
 .panel {
@@ -493,9 +635,9 @@ h2 {
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  margin: 0 0 12px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px 16px;
+  margin: 0;
 }
 
 .stats dt {
