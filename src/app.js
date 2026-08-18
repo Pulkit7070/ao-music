@@ -63,9 +63,23 @@ function setMicStatus(text, tone) {
 }
 
 const driving = $('driving');
+
+// The render loop rewrites this line several times a second, which wiped any
+// message put here by a click before it could be read. A notice holds the line
+// for long enough to read it, and the loop leaves it alone until it expires.
+let noticeUntil = 0;
+
 function setDriver(text, tone) {
+  if (performance.now() < noticeUntil) return;
   driving.textContent = text;
   driving.dataset.tone = tone || 'idle';
+}
+
+/** Say something and make it stay, whatever the loop thinks is going on. */
+function setNotice(text, tone, seconds = 20) {
+  noticeUntil = 0;
+  setDriver(text, tone);
+  noticeUntil = performance.now() + seconds * 1000;
 }
 
 /** One line, in front of everything else, saying what is moving him and why. */
@@ -101,6 +115,7 @@ function feedTrack() {
 }
 
 async function enableMic() {
+  noticeUntil = 0;
   micButton.disabled = true;
   setMicStatus('Asking the browser for the microphone...', 'wait');
   try {
@@ -570,7 +585,11 @@ $('booth-check').addEventListener('click', async () => {
 const trackButton = $('track-open');
 const trackFile = $('track-file');
 
-trackButton.addEventListener('click', () => trackFile.click());
+trackButton.addEventListener('click', () => {
+  // Choosing a source answers whatever the last notice was about.
+  noticeUntil = 0;
+  trackFile.click();
+});
 
 trackFile.addEventListener('change', async () => {
   const file = trackFile.files && trackFile.files[0];
@@ -589,7 +608,7 @@ trackFile.addEventListener('change', async () => {
     localTrack = '';
     trackButton.dataset.state = 'off';
     trackButton.querySelector('.source__note').textContent = 'That file would not play. Try another.';
-    setDriver(`Could not play that file: ${error && error.message ? error.message : error}`, 'error');
+    setNotice(`Could not play that file: ${error && error.message ? error.message : error}`, 'error');
     return;
   }
   advanceQueue(feedTrack());
@@ -620,10 +639,13 @@ spotify.subscribe((state, status) => {
 
 spotifyButton.addEventListener('click', () => {
   if (!spotify.isConfigured()) {
-    setDriver(
-      'Spotify needs a Client ID first: make an app at developer.spotify.com, ' +
-        `add ${location.origin + location.pathname} as a Redirect URI, and put the Client ID in src/app.js.`,
+    setNotice(
+      'Spotify is not set up yet. It needs a Client ID from developer.spotify.com, ' +
+        `with ${location.origin + location.pathname} registered as a Redirect URI. ` +
+        'Nothing is connected and nothing is being sent anywhere. Use Play a track, ' +
+        'or the microphone, both of which work without it.',
       'warn',
+      30,
     );
     return;
   }
