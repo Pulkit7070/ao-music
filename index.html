@@ -16,7 +16,8 @@
           <p class="eyebrow">Agent Orchestrator</p>
           <h1>AO plays the <span>school disco</span></h1>
         </div>
-        <nav class="routes" aria-label="Demo routes">
+        <!-- Shown again by src/app.js when the requests layer is switched on. -->
+        <nav class="routes" id="routes" aria-label="Demo routes" hidden>
           <a href="#dj" data-route-link="dj">DJ booth</a>
           <a href="#party" data-route-link="party"
             >Party requests <b id="queue-badge" hidden></b
@@ -33,14 +34,15 @@
           </div>
           <div class="ticker" aria-live="polite">
             <p class="ticker__label">Now playing</p>
-            <p class="ticker__now" id="stage-now">Nothing queued yet</p>
-            <p class="ticker__label">Up next</p>
-            <ol class="ticker__next" id="stage-next"></ol>
+            <p class="ticker__now" id="stage-now">Nothing playing</p>
+            <p class="ticker__label" id="ticker-next-label" hidden>Up next</p>
+            <ol class="ticker__next" id="stage-next" hidden></ol>
             <button
               type="button"
               class="stage-button ticker__advance"
               id="stage-advance"
               title="Mark the current request played and move to the next (N)"
+              hidden
             >
               Played, next &nbsp;N
             </button>

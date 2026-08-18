@@ -22,6 +22,19 @@ const ROUTES = ['dj', 'party'];
 // page with no backend.
 const SPOTIFY_CLIENT_ID = '';
 
+/**
+ * The requests layer: guests asking a DJ for a song from their phones.
+ *
+ * Off, because the page can now play the song itself. Asking someone else to
+ * put a track on only made sense while the page could not, and once it can, the
+ * request is a step between a person and the music rather than a way to reach
+ * it. What is left is one person, one page: play something, watch him move.
+ *
+ * Nothing is deleted. Set this true and the party route, the queue, the request
+ * page and the hosted store all come back exactly as they were.
+ */
+const REQUESTS = false;
+
 // Declared here rather than beside the wiring below, because the render loop
 // reads them on its first frame and a `let` is unreachable until its line runs.
 const spotify = createSpotify({ clientId: SPOTIFY_CLIENT_ID });
@@ -53,6 +66,7 @@ const deck = createConsole($('deck'), {
 });
 
 let localTrack = '';
+let localFrom = '';
 
 const micButton = $('mic-enable');
 const micStatus = $('mic-status');
@@ -111,7 +125,7 @@ function feedTrack() {
   if (booth && booth.current) return { ...booth.current, from: booth.source || 'djay Pro' };
   const state = deck.getState();
   if (state.source === 'file' && state.playing && localTrack) {
-    return { title: localTrack, artist: '', from: 'this device' };
+    return { title: localTrack, artist: '', from: localFrom || 'this device' };
   }
   return null;
 }
@@ -183,6 +197,7 @@ nextButton.addEventListener('click', playNext);
 // N for next, so it works in full screen without hunting for a button. Ignored
 // while a guest is typing their request.
 window.addEventListener('keydown', (event) => {
+  if (!REQUESTS) return;
   if (event.key !== 'n' && event.key !== 'N') return;
   const tag = event.target && event.target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || event.metaKey || event.ctrlKey || event.altKey) return;
@@ -410,7 +425,10 @@ deck.subscribe((live) => {
 
 // A shared queue when one is configured, so every phone that scans the QR code
 // is writing to the same list the booth is reading.
-const store = createQueueStore({ remote: resolveQueueUrl() });
+// No shared store to poll when nobody is requesting anything: an empty remote
+// keeps the queue in this browser, so the page makes no network calls it has no
+// use for.
+const store = createQueueStore({ remote: REQUESTS ? resolveQueueUrl() : '' });
 const queueUI = mountQueueUI(store, {
   form: $('request-form'),
   name: $('request-name'),
@@ -439,13 +457,26 @@ const stageNow = $('stage-now');
 const stageNext = $('stage-next');
 
 function renderTicker() {
+  const live = feedTrack();
+
+  // Without the requests layer the ticker has one job: name what is on. There
+  // is no queue to stand in for it and nothing to be up next.
+  if (!REQUESTS) {
+    stageNow.textContent = live ? live.title : 'Nothing playing';
+    if (live) {
+      const by = document.createElement('small');
+      by.textContent = [live.artist, live.remaining].filter(Boolean).join('  ') || live.from;
+      stageNow.appendChild(by);
+    }
+    return;
+  }
+
   const pending = store.pending();
   const waiting = pending.length;
   queueBadge.textContent = waiting ? String(waiting) : '';
   queueBadge.hidden = waiting === 0;
 
   const queued = pending[0];
-  const live = feedTrack();
   nextButton.disabled = !queued;
 
   // While the monitor is answering, it is the only thing that says what is
@@ -523,6 +554,7 @@ function sameTrack(a, b) {
 let playing = null; // { title, elapsed } of the booth track we last saw
 
 function advanceQueue(next) {
+  if (!REQUESTS) return;
   const finished = playing;
   playing = next ? { title: next.title, elapsed: seconds(next.elapsed) } : null;
   if (!finished || (next && sameTrack(finished.title, next.title))) return;
@@ -647,22 +679,38 @@ async function rescue(url) {
   return rescuedUrl;
 }
 
+/** Did the clock move? A stalled element reports neither error nor progress. */
+async function isReallyPlaying() {
+  const audio = deck.getAudio();
+  const started = audio.currentTime;
+  await new Promise((resolve) => setTimeout(resolve, 1400));
+  return !audio.paused && !audio.error && audio.currentTime > started;
+}
+
 /** Put a track on. Local file or catalogue URL, same path from here down. */
 async function playTrack(track, depth = 0) {
   if (!track) return;
-  localTrack = track.artist ? `${track.title} - ${track.artist}` : track.title;
+  // Cleared first: a failure must not leave the screen naming the track that
+  // did not play.
+  localTrack = '';
+  localFrom = '';
+  renderTicker();
+  const label = track.artist ? `${track.title} - ${track.artist}` : track.title;
   try {
     await deck.setSource('file', track.url);
     // A playlist that loops one track never reaches the next one.
     deck.getAudio().loop = false;
     await deck.play();
-    // setSource swallows its own play failure, so ask the element directly
-    // rather than trusting that no exception means it is playing.
+    // A resolved play() is not the same as audio arriving. Catalogue tracks are
+    // served by independent nodes and one measured resolving, reporting no
+    // error, and then producing silence: the analyser saw a flat spectrum and
+    // the mascot stood still while the screen named a track. So confirm the
+    // clock actually moved before believing it.
     if (deck.getAudio().error) throw new Error(deck.getAudio().error.message || 'unsupported');
+    if (!(await isReallyPlaying())) throw new Error('no audio arrived');
   } catch (error) {
     if (track.local) {
       setNotice(`Could not play ${track.title}: ${error && error.message ? error.message : error}`, 'error');
-      localTrack = '';
       return;
     }
     try {
@@ -670,6 +718,7 @@ async function playTrack(track, depth = 0) {
       await deck.setSource('file', await rescue(track.url));
       deck.getAudio().loop = false;
       await deck.play();
+      if (!(await isReallyPlaying())) throw new Error('no audio arrived');
     } catch (second) {
       // Catalogue tracks are served by a network of independent storage nodes
       // and some of them will not answer a browser, whatever the metadata says:
@@ -688,10 +737,11 @@ async function playTrack(track, depth = 0) {
         `Could not play ${track.title}: ${second && second.message ? second.message : second}`,
         'error',
       );
-      localTrack = '';
       return;
     }
   }
+  localTrack = label;
+  localFrom = track.from || 'this device';
   trackButton.querySelector('.source__name').textContent = 'Playing';
   trackButton.querySelector('.source__note').textContent = localTrack;
   advanceQueue(feedTrack());
@@ -815,6 +865,10 @@ function renderPlaylist() {
 playlist.subscribe(renderPlaylist);
 renderPlaylist();
 
+// With requests gone this is the point of the page, not a panel to be found, so
+// it is open from the start and the search field is the first thing to hand.
+if (!REQUESTS) deckPanel.hidden = false;
+
 // -- spotify ------------------------------------------------------------------
 
 const spotifyButton = $('spotify-connect');
@@ -873,6 +927,7 @@ window.addEventListener('storage', (event) => {
 
 function currentRoute() {
   const hash = location.hash.replace('#', '');
+  if (!REQUESTS) return 'dj';
   return ROUTES.includes(hash) ? hash : 'dj';
 }
 
@@ -886,8 +941,17 @@ function applyRoute() {
   }
   $('stage-caption').textContent =
     route === 'dj'
-      ? 'He is reading the room through the microphone.'
+      ? 'Put something on and he moves to it.'
       : 'Same ears, same mascot: the floor can see what the queue is doing.';
+}
+
+// Everything the requests layer owns is hidden in the markup and revealed here,
+// so switching REQUESTS back on needs no edit to index.html.
+if (REQUESTS) {
+  $('routes').hidden = false;
+  $('ticker-next-label').hidden = false;
+  $('stage-next').hidden = false;
+  $('stage-advance').hidden = false;
 }
 
 window.addEventListener('hashchange', applyRoute);
