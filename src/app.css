@@ -78,6 +78,12 @@ h2 {
   gap: 6px;
 }
 
+/* Any element given a display value needs this or the hidden attribute does
+   nothing: the same trap that once rendered both routes at once. */
+[hidden] {
+  display: none !important;
+}
+
 .routes a {
   display: inline-flex;
   align-items: center;
