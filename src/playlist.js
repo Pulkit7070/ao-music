@@ -37,6 +37,7 @@ function titleFromFile(name) {
 export function createPlaylist() {
   let tracks = [];
   let index = -1;
+  let shuffle = false;
   const listeners = new Set();
 
   const announce = () => listeners.forEach((cb) => cb());
@@ -111,7 +112,23 @@ export function createPlaylist() {
       return tracks[index];
     },
 
+    setShuffle(on) {
+      shuffle = Boolean(on);
+      announce();
+    },
+
+    isShuffled: () => shuffle,
+
     next() {
+      if (tracks.length === 0) return null;
+      if (shuffle && tracks.length > 1) {
+        // Anything but the one just played, so shuffle never repeats a track
+        // back to back, which reads as the button being broken.
+        const choices = tracks.map((_, i) => i).filter((i) => i !== index);
+        index = choices[Math.floor(Math.random() * choices.length)];
+        announce();
+        return tracks[index];
+      }
       if (index + 1 >= tracks.length) return null;
       index += 1;
       announce();

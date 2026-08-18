@@ -101,6 +101,55 @@
           <p class="deck__note" id="library-note" hidden></p>
           <ol class="results" id="library-results" hidden></ol>
 
+          <!--
+            Transport. Icons are inline paths rather than a font or a sprite:
+            nothing here may reach off-origin, and a glyph that fails to load is
+            a control nobody can find.
+          -->
+          <div class="transport" id="transport">
+            <div class="transport__row">
+              <button type="button" class="tbtn" id="t-shuffle" title="Shuffle" aria-pressed="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
+                </svg>
+              </button>
+              <button type="button" class="tbtn" id="t-prev" title="Previous">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M18 5v14L8 12zM6 5v14" />
+                </svg>
+              </button>
+              <button type="button" class="tbtn tbtn--main" id="t-play" title="Play or pause (space)">
+                <svg viewBox="0 0 24 24" aria-hidden="true" id="t-play-icon">
+                  <path d="M8 5l11 7-11 7z" />
+                </svg>
+              </button>
+              <button type="button" class="tbtn" id="t-next" title="Next">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 5v14l10-7zM18 5v14" />
+                </svg>
+              </button>
+              <button type="button" class="tbtn" id="t-repeat" title="Repeat this track" aria-pressed="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M17 1l4 4-4 4M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 01-4 4H3" />
+                </svg>
+              </button>
+            </div>
+            <div class="transport__seek">
+              <span class="transport__time" id="t-elapsed">0:00</span>
+              <input
+                type="range"
+                id="t-scrub"
+                class="scrub"
+                min="0"
+                max="1000"
+                value="0"
+                step="1"
+                aria-label="Seek"
+              />
+              <span class="transport__time" id="t-total">0:00</span>
+            </div>
+          </div>
+
           <ol class="playlist" id="playlist"></ol>
         </section>
 

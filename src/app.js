@@ -102,9 +102,13 @@ function setNotice(text, tone, seconds = 20) {
 function describeDriver() {
   const listening = deck.getState().source === 'mic';
   const track = feedTrack();
-  if (track && track.from === 'this device') {
+  const state = deck.getState();
+  const playingHere = state.source === 'file' && state.playing;
+  if (track && playingHere) {
     // Straight into the analyser, so this is the real beat of the real track:
-    // better than the microphone, which also hears the room.
+    // better than the microphone, which also hears the room. Tested by the deck
+    // rather than by the label, which used to say "this device" for everything
+    // and stopped matching the moment catalogue tracks credited their source.
     setDriver(`Playing ${track.title}. Moving to the track itself.`, 'ok');
   } else if (track && !hearing) {
     setDriver(`Moving to ${track.title}, from ${track.from}. Assumed tempo, nothing is being heard.`, 'ok');
@@ -698,8 +702,9 @@ async function playTrack(track, depth = 0) {
   const label = track.artist ? `${track.title} - ${track.artist}` : track.title;
   try {
     await deck.setSource('file', track.url);
-    // A playlist that loops one track never reaches the next one.
-    deck.getAudio().loop = false;
+    // A playlist that loops one track never reaches the next one, unless repeat
+    // is on, which is exactly the request to loop this one.
+    deck.getAudio().loop = repeatOne;
     await deck.play();
     // A resolved play() is not the same as audio arriving. Catalogue tracks are
     // served by independent nodes and one measured resolving, reporting no
@@ -716,7 +721,7 @@ async function playTrack(track, depth = 0) {
     try {
       trackButton.querySelector('.source__note').textContent = `Loading ${track.title}...`;
       await deck.setSource('file', await rescue(track.url));
-      deck.getAudio().loop = false;
+      deck.getAudio().loop = repeatOne;
       await deck.play();
       if (!(await isReallyPlaying())) throw new Error('no audio arrived');
     } catch (second) {
@@ -822,9 +827,34 @@ function renderResults(found, text) {
       const [row] = playlist.add(track);
       if (!playlist.current()) playTrack(playlist.playAt(playlist.tracks().indexOf(row)));
     });
-    li.append(name, len, add);
+    li.append(artFor(track), name, len, add);
     libraryResults.appendChild(li);
   }
+}
+
+/**
+ * A thumbnail for a row. Local files have no artwork and some catalogue images
+ * are served by a node that will not answer, so the fallback is the same size as
+ * the picture: a row must not change height depending on whether an image
+ * arrived.
+ */
+function artFor(track) {
+  const placeholder = () => {
+    const span = document.createElement('span');
+    span.className = 'art art--none';
+    span.textContent = '\u266b';
+    span.setAttribute('aria-hidden', 'true');
+    return span;
+  };
+  if (!track.art) return placeholder();
+  const img = document.createElement('img');
+  img.className = 'art';
+  img.src = track.art;
+  img.alt = '';
+  img.loading = 'lazy';
+  img.decoding = 'async';
+  img.addEventListener('error', () => img.replaceWith(placeholder()), { once: true });
+  return img;
 }
 
 // -- the playlist --------------------------------------------------------------
@@ -857,12 +887,141 @@ function renderPlaylist() {
     drop.className = 'playlist__drop';
     drop.textContent = 'Remove';
     drop.addEventListener('click', () => playlist.remove(track.id));
-    li.append(name, where, drop);
+    li.append(artFor(track), name, where, drop);
     playlistList.appendChild(li);
   });
 }
 
+// -- transport -----------------------------------------------------------------
+
+const tPlay = $('t-play');
+const tPlayIcon = $('t-play-icon');
+const tPrev = $('t-prev');
+const tNext = $('t-next');
+const tShuffle = $('t-shuffle');
+const tRepeat = $('t-repeat');
+const tElapsed = $('t-elapsed');
+const tTotal = $('t-total');
+const tScrub = $('t-scrub');
+
+const PLAY_PATH = 'M8 5l11 7-11 7z';
+const PAUSE_PATH = 'M8 5h3v14H8zM13 5h3v14h-3z';
+
+let repeatOne = false;
+// While a finger is on the scrub bar the clock must not fight it back.
+let scrubbing = false;
+
+/** Seconds to m:ss, and "0:00" for anything not yet known. */
+function stamp(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const total = Math.floor(seconds);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+function renderTransport() {
+  const audio = deck.getAudio();
+  const onDeck = deck.getState().source === 'file' && Boolean(playlist.current());
+  const playing = onDeck && !audio.paused;
+
+  tPlayIcon.querySelector('path').setAttribute('d', playing ? PAUSE_PATH : PLAY_PATH);
+  tPlay.title = playing ? 'Pause (space)' : 'Play (space)';
+  tPlay.disabled = playlist.isEmpty();
+  tPrev.disabled = playlist.isEmpty();
+  tNext.disabled = playlist.isEmpty();
+  tScrub.disabled = !onDeck || !Number.isFinite(audio.duration) || audio.duration === 0;
+
+  const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+  const at = onDeck ? audio.currentTime : 0;
+  tElapsed.textContent = stamp(at);
+  tTotal.textContent = stamp(duration);
+
+  const fraction = duration > 0 ? Math.min(1, at / duration) : 0;
+  if (!scrubbing) tScrub.value = String(Math.round(fraction * 1000));
+  // One element instead of three: the played part is painted into the track.
+  const percent = (fraction * 100).toFixed(2);
+  tScrub.style.setProperty(
+    '--scrub',
+    `linear-gradient(to right, var(--text) ${percent}%, #212b38 ${percent}%)`,
+  );
+}
+
+tPlay.addEventListener('click', async () => {
+  const audio = deck.getAudio();
+  if (playlist.isEmpty()) return;
+  // Nothing chosen yet: the obvious meaning of pressing play is start at the top.
+  if (!playlist.current()) return playTrack(playlist.playAt(0));
+  if (deck.getState().source !== 'file') return playTrack(playlist.current());
+  if (audio.paused) await deck.play().catch(() => {});
+  else deck.pause();
+  renderTransport();
+});
+
+tNext.addEventListener('click', () => {
+  const next = playlist.next();
+  if (next) playTrack(next);
+});
+
+tPrev.addEventListener('click', () => {
+  const audio = deck.getAudio();
+  // Under three seconds in, back means the previous track; after that it means
+  // the start of this one, which is what every player does.
+  if (deck.getState().source === 'file' && audio.currentTime > 3) {
+    deck.seek(0);
+    renderTransport();
+    return;
+  }
+  const previous = playlist.previous();
+  if (previous) playTrack(previous);
+  else deck.seek(0);
+});
+
+tShuffle.addEventListener('click', () => {
+  const on = tShuffle.getAttribute('aria-pressed') !== 'true';
+  tShuffle.setAttribute('aria-pressed', String(on));
+  playlist.setShuffle(on);
+});
+
+tRepeat.addEventListener('click', () => {
+  repeatOne = !repeatOne;
+  tRepeat.setAttribute('aria-pressed', String(repeatOne));
+  deck.getAudio().loop = repeatOne;
+});
+
+tScrub.addEventListener('pointerdown', () => {
+  scrubbing = true;
+});
+tScrub.addEventListener('input', () => {
+  const duration = deck.getAudio().duration;
+  if (Number.isFinite(duration) && duration > 0) {
+    tElapsed.textContent = stamp((Number(tScrub.value) / 1000) * duration);
+  }
+});
+const endScrub = () => {
+  if (!scrubbing) return;
+  scrubbing = false;
+  const duration = deck.getAudio().duration;
+  if (Number.isFinite(duration) && duration > 0) deck.seek((Number(tScrub.value) / 1000) * duration);
+  renderTransport();
+};
+tScrub.addEventListener('pointerup', endScrub);
+tScrub.addEventListener('change', endScrub);
+
+// Space is the play/pause key everywhere, but not while a search box has focus.
+window.addEventListener('keydown', (event) => {
+  if (event.code !== 'Space') return;
+  const tag = event.target && event.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON') return;
+  event.preventDefault();
+  tPlay.click();
+});
+
+for (const name of ['play', 'pause', 'timeupdate', 'durationchange', 'loadedmetadata', 'ended']) {
+  deck.getAudio().addEventListener(name, renderTransport);
+}
+renderTransport();
+
 playlist.subscribe(renderPlaylist);
+playlist.subscribe(renderTransport);
 renderPlaylist();
 
 // With requests gone this is the point of the page, not a panel to be found, so
