@@ -578,6 +578,25 @@ export function createConsole(container, opts = {}) {
     },
 
     /**
+     * Stop listening, without starting anything in its place.
+     *
+     * setSource('loop') would also release the microphone, but it would begin
+     * playing the bundled loop out of the speakers, which is not what anyone
+     * means by stop. This leaves silence and drops the recording indicator.
+     */
+    async stopListening() {
+      if (source !== 'mic') return handle;
+      await stopMic();
+      audio.pause();
+      audio.src = loopUrl;
+      source = 'loop';
+      statusText = 'stopped';
+      resetDetector();
+      if (ui) ui.sync();
+      return handle;
+    },
+
+    /**
      * The media element itself, so a playlist can hear "ended" and turn looping
      * off. Deliberately narrow in intent: everything else about transport has a
      * method above, and reaching in here to seek or set a source would bypass

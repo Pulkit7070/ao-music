@@ -69,7 +69,7 @@ function render() {
     what.textContent = live.artist ? `${live.title} - ${live.artist}` : live.title;
     now.appendChild(what);
   } else {
-    now.textContent = nowPlaying.isReachable() ? 'Nothing playing right now' : 'AO plays the school disco';
+    now.textContent = nowPlaying.isReachable() ? 'Nothing playing right now' : 'AO plays the disco';
   }
 
   const list = $('list');

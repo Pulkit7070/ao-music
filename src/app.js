@@ -1,4 +1,4 @@
-// AO school disco: one page, two routes (#dj and #party).
+// AO disco: one page, two routes (#dj and #party).
 //
 // The stage, the AudioContext and the animation loop are built exactly once,
 // here. Routing only toggles which panel is visible, so switching routes never
@@ -134,14 +134,27 @@ function feedTrack() {
   return null;
 }
 
+/**
+ * Write the microphone card.
+ *
+ * Not textContent: the button holds three spans, and setting text on the button
+ * itself deletes all of them and leaves a bare string where the card was.
+ */
+function setMicCard(name, note, state) {
+  micButton.querySelector('.source__name').textContent = name;
+  micButton.querySelector('.source__note').textContent = note;
+  micButton.dataset.state = state || 'off';
+}
+
 async function enableMic() {
   noticeUntil = 0;
   micButton.disabled = true;
+  setMicCard('Microphone', 'Asking the browser...', 'off');
   setMicStatus('Asking the browser for the microphone...', 'wait');
   try {
     await deck.setSource('mic');
     setMicStatus('Listening to the room. Play something on the speakers.', 'ok');
-    micButton.textContent = 'Microphone live';
+    setMicCard('Listening', 'Hearing the room. Click to stop.', 'on');
   } catch (error) {
     const denied = /denied|not allowed|permission/i.test(String(error && error.message));
     setMicStatus(
@@ -151,12 +164,39 @@ async function enableMic() {
             'You can still drive the demo from the audio source panel below.',
       'error',
     );
-    micButton.textContent = 'Retry microphone';
-    micButton.disabled = false;
+    setMicCard(
+      'Retry microphone',
+      denied ? 'Blocked. Allow it in the address bar, then click again.' : 'Could not start. Click to try again.',
+      'off',
+    );
   }
+  micButton.disabled = false;
+  describeDriver();
 }
 
-micButton.addEventListener('click', enableMic);
+/**
+ * Stop listening. There was no way to do this at all: the microphone stayed
+ * open, and the browser's recording indicator with it, until the tab was
+ * closed. Turning something on without a way to turn it off is worse when the
+ * thing is a microphone.
+ */
+async function disableMic() {
+  micButton.disabled = true;
+  await deck.stopListening();
+  setMicCard('Microphone', 'He hears the room and moves to the real beat', 'off');
+  setMicStatus('Microphone off.', 'idle');
+  micButton.disabled = false;
+  describeDriver();
+  // Whatever was on the deck before is still there, so pick it back up rather
+  // than leaving him standing in silence.
+  const current = playlist.current();
+  if (current) playTrack(current);
+}
+
+micButton.addEventListener('click', () => {
+  if (deck.getState().source === 'mic') return disableMic();
+  return enableMic();
+});
 
 
 // A microphone-free way to tell a broken page from a broken input: this plays
