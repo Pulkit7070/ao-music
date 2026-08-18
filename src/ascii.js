@@ -65,7 +65,10 @@ export function createAsciiStage(container) {
   let offY = 0;
   let worldLeft = 0;
   let worldRight = VIEW_W;
-  const FRAME = { cx: 186, top: 34, bottom: 362 };
+  // bottom sits below BOX.bottom (366), or the base of the cabinet is cut off at
+  // every size: the frame is what fills the canvas height, so anything outside
+  // it is never drawn.
+  const FRAME = { cx: 186, top: 34, bottom: 370 };
   let density = new Float32Array(0);
   let kind = new Uint8Array(0);
   let noise = new Float32Array(0);

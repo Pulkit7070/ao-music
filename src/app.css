@@ -122,6 +122,12 @@ h2 {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
+  /* The ratio is a preference, not a promise. Full width at 16/9 is taller than
+     a 13 inch laptop has left under the header, which pushed the booth and the
+     mascot's feet below the fold. Reported on a 13 inch and reproduced at
+     1280x800. The renderer frames to whatever height it is given, so giving way
+     here costs a slightly smaller mascot and nothing else. */
+  max-height: calc(100dvh - 140px);
   background: #000;
   border: 1px solid var(--border);
   overflow: hidden;
@@ -136,7 +142,10 @@ h2 {
 .stage:fullscreen {
   aspect-ratio: auto;
   width: 100vw;
-  height: 100vh;
+  /* dvh, not vh: on a phone vh is the tallest the viewport ever gets, so the
+     bottom of the scene hides under the browser chrome. */
+  height: 100dvh;
+  max-height: 100dvh;
   border: 0;
 }
 
