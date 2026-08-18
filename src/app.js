@@ -639,11 +639,16 @@ spotify.subscribe((state, status) => {
 
 spotifyButton.addEventListener('click', () => {
   if (!spotify.isConfigured()) {
+    // Deliberately not a to-do. Since February 2026 a new Spotify app is capped
+    // at five people, each allowlisted by email in the dashboard, and lifting
+    // that needs a registered business with 250,000 monthly users. There is no
+    // version of this that works for a room of guests, so the button says why
+    // rather than sending anyone off to build something that cannot work.
     setNotice(
-      'Spotify is not set up yet. It needs a Client ID from developer.spotify.com, ' +
-        `with ${location.origin + location.pathname} registered as a Redirect URI. ` +
-        'Nothing is connected and nothing is being sent anywhere. Use Play a track, ' +
-        'or the microphone, both of which work without it.',
+      'Spotify cannot work for a party. A new app is limited to five people, each ' +
+        'added by email in the dashboard, and removing that limit needs a registered ' +
+        'business with 250,000 monthly users. It also stopped giving out tempo in 2024, ' +
+        'so it never knew the beat. Use Play a track, or the microphone.',
       'warn',
       30,
     );
